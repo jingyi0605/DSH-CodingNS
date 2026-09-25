@@ -7,7 +7,7 @@ import { CODINGNS_RPC_CHANNEL } from '../../shared/contracts/transport.js'
 import { dshButtonStyle, dshFieldStyle, dshFormRootStyle, dshThemeColor } from '../theme.js'
 
 export const DEBUG_KIND = 'debug'
-export const DEBUG_PROVIDER_ID = 'dsh-codingns/debug'
+export const DEBUG_PROVIDER_ID = 'codingns4dsh/debug'
 const PORT_CHECK_INTERVAL_MS = 5_000
 
 interface DebugTabProps extends PropsRuntime<'sidebar.right.pane.tab'> {
@@ -51,19 +51,32 @@ interface DebugProfileDraft {
 /** 注册最小 Debug 页面；页面只负责展示和发送用户意图。 */
 export function registerDebugUi(ctx: Context, rpc: CodingNsRpcClient, remote: unknown): () => void {
   const disposers: Array<() => void> = []
-  disposers.push(ctx.sidebarRightTabs.register({
-    id: DEBUG_PROVIDER_ID,
-    kind: DEBUG_KIND,
-    multiple: false,
-    priority: 'extension',
-    title: () => '调试',
-    guide: [{ id: 'debug', order: 30, title: () => '调试', description: () => '启动工作区命令、检查端口并访问服务', icon: DebugIcon }],
-  }))
-  disposers.push(ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
-    name: 'sidebar.right.pane.tab', key: DEBUG_PROVIDER_ID,
-    inject: () => ({ rpc, remote, sidebarRight: ctx.sidebarRight }),
-  }, DebugBody)))
+  try {
+    disposers.push(ctx.sidebarRightTabs.register({
+      id: DEBUG_PROVIDER_ID,
+      kind: DEBUG_KIND,
+      multiple: false,
+      priority: 'extension',
+      title: () => '调试',
+      guide: [{ id: 'debug', order: 30, title: () => '调试', description: () => '启动工作区命令、检查端口并访问服务', icon: DebugIcon }],
+    }))
+    disposers.push(ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
+      name: 'sidebar.right.pane.tab', key: DEBUG_PROVIDER_ID,
+      inject: () => ({ rpc, remote, sidebarRight: ctx.sidebarRight }),
+    }, DebugBody)))
+  } catch (error) {
+    for (const dispose of disposers.reverse()) dispose()
+    if (isDuplicateDebugRegistration(error)) {
+      console.warn(`codingns4dsh: 调试 Sidebar 已注册，跳过重复注册: ${DEBUG_PROVIDER_ID}`)
+      return () => {}
+    }
+    throw error
+  }
   return () => { for (const dispose of disposers.reverse()) dispose() }
+}
+
+function isDuplicateDebugRegistration(error: unknown): boolean {
+  return error instanceof Error && /sidebarRight: (?:tab type id|tab kind) .* already registered/u.test(error.message)
 }
 
 function DebugBody({ sessionId, rpc, remote, sidebarRight }: DebugTabProps): ReactElement {
