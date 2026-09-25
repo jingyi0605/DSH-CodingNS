@@ -305,7 +305,8 @@ export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, 
         if (!isRemoteContext() || typeof window === 'undefined' || window.parent === window) {
           throw new Error('Codingns Connect 账号只能从远程访问页面注销')
         }
-        window.parent.postMessage({ kind: 'codingns4dsh:remote-logout' }, window.location.origin)
+        // srcdoc 沙箱中的 location.origin 可能为 "null"；父页面会按 iframe 窗口校验来源。
+        window.parent.postMessage({ kind: 'codingns4dsh:remote-logout' }, '*')
         return
       } else if (account?.scope === 'relay') writeLoginProtectionSession(undefined)
       else if (account?.scope === 'lan') await fetch('/__codingns/logout', { credentials: 'include', redirect: 'manual' })
