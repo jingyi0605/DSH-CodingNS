@@ -190,3 +190,57 @@ test('Client 在解析工作区后按工作区键复用终端绑定', async () =
     else Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: previousStorage })
   }
 })
+
+test('Client 首次渲染异步解析工作区时不会覆盖已有终端', async () => {
+  const previousStorage = globalThis.localStorage
+  const values = new Map<string, string>([
+    ['dsh.codingns.terminal.binding.v1.' + JSON.stringify(['workspace', 'workspace-stable', 'content-a']), 'terminal-1'],
+  ])
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => { values.set(key, String(value)) },
+      removeItem: (key) => { values.delete(key) },
+    },
+  })
+  try {
+    const { calls, remote } = createRemote(true)
+    remote.environment = async () => success({ ...environment, workspaceId: 'workspace-stable' })
+    const service = new CodingNsWebTerminals(new Context(), remote)
+    const view = service.view('session-b', 'tab-b', 'content-a')
+
+    await view.refresh()
+
+    assert.equal(view.id, 'terminal-1')
+    assert.equal(view.state.getSnapshot().info?.id, 'terminal-1')
+    assert.equal(calls.create, 0)
+    await service.dispose()
+  } finally {
+    if (previousStorage === undefined) delete (globalThis as { localStorage?: unknown }).localStorage
+    else Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: previousStorage })
+  }
+})
+
+test('DSH 0.1.5/0.1.6 缺少 workspaceId 时保持会话级终端显示逻辑', async () => {
+  for (const dshVersion of ['0.1.5-rc.3', '0.1.6-alpha.2']) {
+    const { calls, remote } = createRemote()
+    remote.environment = async () => {
+      // 旧版环境响应没有 workspaceId，Client 必须继续使用 session 绑定。
+      const { workspaceId: _workspaceId, ...legacyEnvironment } = environment
+      return success(legacyEnvironment)
+    }
+    const service = new CodingNsWebTerminals(new Context(), remote)
+    const first = service.view(`${dshVersion}-session-a`, 'tab-a', 'content-a')
+    await first.refresh()
+
+    assert.equal(first.state.getSnapshot().info?.id, 'terminal-1')
+    assert.equal(calls.create, 1)
+
+    const second = service.view(`${dshVersion}-session-b`, 'tab-b', 'content-a')
+    await second.refresh()
+    assert.notEqual(second.id, first.id)
+    assert.equal(calls.create, 2)
+    await service.dispose()
+  }
+})

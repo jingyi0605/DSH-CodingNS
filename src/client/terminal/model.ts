@@ -82,9 +82,16 @@ interface PendingRender {
   readonly resolve: () => void
 }
 
+interface WorkspaceBindingResolution {
+  readonly id: WebTerminalId
+  /** 是否来自已有工作区绑定；新建绑定仍允许本次 view 创建 Host 终端。 */
+  readonly existing: boolean
+}
+
 /** 一个 Sidebar 标签对应的终端模型；DOM 卸载只 detach，显式 close 才结束 Host 进程。 */
 export class CodingNsTerminalView {
   readonly state: TerminalObservable<TerminalViewState>
+  id: WebTerminalId
   private readonly store = new ObservableValue<TerminalViewState>({ phase: 'idle', title: '终端', writable: false })
   private readonly lifetime = new AbortController()
   private followController: AbortController | undefined
@@ -99,12 +106,13 @@ export class CodingNsTerminalView {
 
   constructor(
     readonly sessionId: string,
-    readonly id: WebTerminalId,
+    id: WebTerminalId,
     private readonly remote: TerminalRemoteSource,
     private readonly createWhenMissing: boolean,
     private readonly shellPath?: string,
-    private readonly onWorkspaceResolved?: (workspaceId: string) => void,
+    private readonly onWorkspaceResolved?: (workspaceId: string, id: WebTerminalId) => WorkspaceBindingResolution | undefined,
   ) {
+    this.id = id
     this.state = this.store
   }
 
@@ -195,10 +203,18 @@ export class CodingNsTerminalView {
     try {
       const remote = resolveRemote(this.remote)
       const environment = unwrap(await remote.environment(this.sessionId, this.lifetime.signal))
-      if (environment.workspaceId !== undefined) this.onWorkspaceResolved?.(environment.workspaceId)
+      let createWhenMissing = this.createWhenMissing
+      if (environment.workspaceId !== undefined) {
+        const binding = this.onWorkspaceResolved?.(environment.workspaceId, this.id)
+        if (binding !== undefined) {
+          if (binding.id !== this.id) this.id = binding.id
+          // 工作区已有绑定时，恢复必须失败闭合，不能用新 ID 偷建替代终端。
+          createWhenMissing = !binding.existing
+        }
+      }
       const listed = unwrap(await remote.list(this.sessionId))
       let info = listed.find((entry) => entry.id === this.id)
-      if (info === undefined && this.createWhenMissing) {
+      if (info === undefined && createWhenMissing) {
         this.patch({ phase: 'creating', environment })
         info = unwrap(await remote.create(this.sessionId, {
           id: this.id,
@@ -326,7 +342,7 @@ export class CodingNsWebTerminals extends Service {
       this.remote,
       saved === undefined,
       shellPath,
-      (resolvedWorkspaceId) => this.rememberWorkspace(sessionId, contentId, id, resolvedWorkspaceId),
+      (resolvedWorkspaceId, currentId) => this.rememberWorkspace(sessionId, contentId, currentId, resolvedWorkspaceId),
     )
     this.views.set(mapKey, { contentId, view })
     return view
@@ -390,9 +406,14 @@ export class CodingNsWebTerminals extends Service {
     this.recoveries.clear()
   }
 
-  private rememberWorkspace(sessionId: string, contentId: string, id: WebTerminalId, workspaceId: string): void {
+  private rememberWorkspace(sessionId: string, contentId: string, id: WebTerminalId, workspaceId: string): WorkspaceBindingResolution {
     this.workspaceIds.set(sessionId, workspaceId)
-    writeWorkspaceBinding(workspaceId, contentId, id)
+    const existing = readWorkspaceBinding(workspaceId, contentId)
+    const resolvedId = existing ?? id
+    // 修正首次渲染时已经写入的会话键，避免第二个会话继续携带临时 ID。
+    writeBinding(sessionId, contentId, resolvedId)
+    if (existing === undefined) writeWorkspaceBinding(workspaceId, contentId, id)
+    return { id: resolvedId, existing: existing !== undefined }
   }
 
   private async cleanup(request: CloseRequest, view?: CodingNsTerminalView): Promise<void> {

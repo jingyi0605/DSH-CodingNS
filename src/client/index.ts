@@ -71,7 +71,7 @@ export { CodingNsTerminalView, CodingNsWebTerminals, registerCodingNsTerminalUi 
 export { registerSubscriptionSlot, registerCommandCodeSubscriptionSlot, CommandCodeSubscriptionSlot } from './subscription-slot.js'
 
 /** Client Runner 用于等待服务就绪的 Cordis 依赖声明。 */
-export const inject = ['slots', 'connection', 'remote', 'remote.workspace', 'remote.session', 'remote.terminal', 'sidebarRight', 'sidebarRightTabs', 'theme', 'locale', 'uiConversation'] as const
+export const inject = ['slots', 'connection', 'remote', 'remote.workspace', 'remote.session', 'sidebarRight', 'sidebarRightTabs', 'theme', 'locale', 'uiConversation'] as const
 
 /**
  * 把 Codingns4DSH 设置页挂载到 DSH 设置左侧导航，并让模块开关驱动启停。
@@ -87,7 +87,7 @@ export function apply(ctx?: Context): void {
   ensureCryptoRandomUUID()
   ctx.effect(() => registerCodingNsLocale(ctx), 'codingns4dsh: Client 词典')
 
-  ctx.inject(['slots', 'connection', 'remote', 'remote.workspace', 'remote.session', 'remote.terminal', 'sidebarRight', 'sidebarRightTabs', 'theme', 'locale', 'uiConversation'], (settingsCtx) => {
+  ctx.inject(['slots', 'connection', 'remote', 'remote.workspace', 'remote.session', 'sidebarRight', 'sidebarRightTabs', 'theme', 'locale', 'uiConversation'], (settingsCtx) => {
     debugInfo('codingns4dsh: client inject ready', {
       hasConnection: settingsCtx.connection !== undefined,
       hasRemote: settingsCtx.remote !== undefined,

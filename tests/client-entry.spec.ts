@@ -105,9 +105,12 @@ test('Client 构建产物声明 Cordis 服务依赖', async () => {
   const source = await readFile(clientBundle, 'utf8')
   assert.match(source, /exports\.inject\s*=\s*inject/u)
   const clientSourceText = await readFile(clientSource, 'utf8')
-  for (const dependency of ['remote', 'remote.workspace', 'remote.session', 'remote.terminal']) {
+  for (const dependency of ['remote', 'remote.workspace', 'remote.session']) {
     assert.match(clientSourceText, new RegExp(`['"]${dependency.replace('.', '\\.') }['"]`))
   }
+  const injectDeclaration = clientSourceText.match(/export const inject = \[([^\]]+)\]/u)?.[1] ?? ''
+  assert.doesNotMatch(injectDeclaration, /remote\.terminal/u)
+  assert.match(clientSourceText, /const terminalRemote =/u)
 })
 
 test('Client 入口兼容 DSH 0.1.7 ConfigForm，不把旧 settingsScope 作为硬依赖', async () => {
