@@ -1,4 +1,4 @@
-# 任务清单 - 基于 CodingNS HTTP/WS 隧道的 DSH 多路复用网关（人话版）
+# 任务清单 - 基于 Codingns4DSH HTTP/WS 隧道的 DSH 多路复用网关（人话版）
 
 状态：IN_REVIEW；Envelope、Carrier、Session、Gateway、Host Runtime 和 H5 入口已有 Fake/构建验证；真实 Relay/TURN/DSH Web 四端联调未完成。
 
@@ -22,7 +22,7 @@
   - 这一步到底做什么：确认 spec001 的插件总体设计继续有效，并把数据面实现统一到“单 WebSocket、多逻辑流、DSH Envelope”。
   - 做完你能看到什么：接手的人不会在“原生 DSH Transport”与“HTTP/WS 多路复用网关”之间选错方案。
   - 先依赖什么：无
-  - 开始前先看：`../spec001-DeepSeekHarness-CodingNS单一插件/requirements.md`、`../spec001-DeepSeekHarness-CodingNS单一插件/design.md`、本 Spec 的 `requirements.md` 和 `design.md`
+  - 开始前先看：`../spec001-DeepSeekHarness-Codingns4DSH单一插件/requirements.md`、`../spec001-DeepSeekHarness-Codingns4DSH单一插件/design.md`、本 Spec 的 `requirements.md` 和 `design.md`
   - 主要改哪里：本 Spec 文档；必要时同步 spec001 的 Transport 说明
   - 这一步先不做什么：不改 DSH 核心，不建立真实 WebRTC 连接。
   - 怎么算完成：
@@ -66,10 +66,10 @@
 
 ## 阶段 1：建立 Carrier 和 DSH Gateway
 
-- [ ] 1.1 封装 CodingNS WebSocket Carrier
+- [ ] 1.1 封装 Codingns4DSH WebSocket Carrier
   - 状态：TODO
-  - 这一步到底做什么：把现有 CodingNS `ws.open`、`ws.message`、分片和 `ws.closed` 封装成 DSH 可注入的 Carrier 接口。
-  - 做完你能看到什么：上层只处理二进制消息和关闭原因，不需要知道 WebRTC 或 CodingNS TunnelFrame 细节。
+  - 这一步到底做什么：把现有 Codingns4DSH `ws.open`、`ws.message`、分片和 `ws.closed` 封装成 DSH 可注入的 Carrier 接口。
+  - 做完你能看到什么：上层只处理二进制消息和关闭原因，不需要知道 WebRTC 或 Codingns4DSH TunnelFrame 细节。
   - 先依赖什么：0.3
   - 开始前先看：`design.md` §2.1、§3.1；`src/transport/carrier.ts`；`src/transport/webrtc-client.ts`
   - 主要改哪里：`src/transport/carrier.ts`、`src/transport/`、`tests/transport.spec.ts`
@@ -115,7 +115,7 @@
 
 - [ ] 1.4 Carrier 到 Gateway 主链路检查
   - 状态：TODO
-  - 这一步到底做什么：验证从 Fake CodingNS WebSocket 到 DSH Gateway 的完整握手和空流生命周期。
+  - 这一步到底做什么：验证从 Fake Codingns4DSH WebSocket 到 DSH Gateway 的完整握手和空流生命周期。
   - 做完你能看到什么：有一条可重复的测试证明控制站/Relay 不需要理解 DSH Envelope。
   - 先依赖什么：1.1、1.2、1.3
   - 开始前先看：`requirements.md` 需求 1～3；`design.md` §2.1、§2.3
@@ -193,7 +193,7 @@
   - 这一步到底做什么：把 Codex、Command Code、Claude Code 等适配器统一成 `adapter` 频道，并支持单独启停。
   - 做完你能看到什么：至少一个真实适配器可以启动、收发 stdin/stdout/stderr、取消并返回 exit。
   - 先依赖什么：2.4
-  - 开始前先看：`requirements.md` 需求 5；`design.md` §2.2；CodingNS 现有 CLI 适配器契约
+  - 开始前先看：`requirements.md` 需求 5；`design.md` §2.2；Codingns4DSH 现有 CLI 适配器契约
   - 主要改哪里：`src/features/cli-adapters/`、`src/features/registry.ts`、`tests/cli-adapter.spec.ts`
   - 这一步先不做什么：不修改 CLI 工具本身，不把 Provider 私有协议写入 Transport。
   - 怎么算完成：不可用 Provider 只影响本流；退出和清理没有残留进程。
@@ -208,7 +208,7 @@
   - 先依赖什么：2.4。
   - 开始前先看：`requirements.md` 需求 3、需求 6、需求 10；`design.md` §4、§8、§10.1、§10.2、§10.6；DSH 官方 terminal controller、sidebar terminal 插件接口和 Bundle 启动顺序。
   - 主要改哪里：`src/shared/contracts/terminal.ts`、`src/shared/contracts/feature.ts`、`src/shared/contracts/config.ts`、`src/host/terminal/terminal-controller.ts`、`src/host/terminal/terminal-store.ts`、`tests/terminal-contract.spec.ts`、`tests/terminal-store.spec.ts`、`tests/feature-wiring.spec.ts`。
-  - 这一步先不做什么：不启动 tmux 或 ConPTY，不修改 Bundle，不禁用官方 controller，不调用 CodingNS 父仓库或 Host 私有接口。
+  - 这一步先不做什么：不启动 tmux 或 ConPTY，不修改 Bundle，不禁用官方 controller，不调用 Codingns4DSH 父仓库或 Host 私有接口。
   - 怎么算完成：兼容契约覆盖列表、创建、订阅、输入、resize、detach、显式关闭和状态事件；持久记录不保存 generation、Socket、订阅或 Host token；重复 sessionId 在不同 HostScope 下不会冲突；`terminalEnhancement` 的开关变化只写下次启动意图，不触发当前 controller 的实时启停。
   - 怎么验证：运行 controller contract、store 恢复和 restart-required feature 测试，再执行 `pnpm exec tsc --noEmit`；保存对 DSH 官方接口及非强化模式可实现性的逐项核对记录。
   - 对应需求：需求 3、需求 6、需求 10、非功能需求 1
@@ -223,7 +223,7 @@
   - 先依赖什么：3.2.1。
   - 开始前先看：`requirements.md` 需求 10；`design.md` §10.2、§10.3、§10.5；tmux 当前支持版本的命令和退出码约定。
   - 主要改哪里：`src/host/terminal/backends/tmux-backend.ts`、`src/host/terminal/runtime-manager.ts`、`tests/tmux-backend.spec.ts`。
-  - 这一步先不做什么：不回退到随 DSH 退出的普通 PTY，不实现 Windows 路径，不让浏览器执行 tmux 命令，不导入 CodingNS 父仓库实现。
+  - 这一步先不做什么：不回退到随 DSH 退出的普通 PTY，不实现 Windows 路径，不让浏览器执行 tmux 命令，不导入 Codingns4DSH 父仓库实现。
   - 怎么算完成：同一个 `runtimeSessionKey` 只对应一个 tmux session；detach 不结束 session；显式关闭确实结束 session；缺少 tmux 或 session 丢失时返回稳定状态和错误。
   - 怎么验证：macOS 和 Linux 分别执行真实 tmux 集成测试，记录 DSH 进程重启前后的 tmux session identity，并运行 Fake command runner 单元测试和 `pnpm exec tsc --noEmit`。
   - 对应需求：需求 4、需求 10、非功能需求 2
@@ -264,7 +264,7 @@
 
 - [ ] 3.2.5 完成终端强化设置、平台 shell 检测与 Sidebar UI 验收
   - 状态：IN_REVIEW
-  - 这一步到底做什么：在 DSH「设置 → CodingNS」增加“终端强化”模块卡片，实现启停待重启提示、默认 profile、外观配置、Host 侧 shell 探测，并通过 DSH 公开 Slot 注册插件自有 Sidebar/xterm 终端页面。
+  - 这一步到底做什么：在 DSH「设置 → Codingns4DSH」增加“终端强化”模块卡片，实现启停待重启提示、默认 profile、外观配置、Host 侧 shell 探测，并通过 DSH 公开 Slot 注册插件自有 Sidebar/xterm 终端页面。
   - 做完你能看到什么：启用或禁用后明确提示重启 DSH；macOS 默认 zsh；Linux 默认 zsh 且缺失时回退 bash；Windows 可选择已安装的 PowerShell、cmd 或 Git Bash；背景、前景、光标、字体、字号、行高、光标行为和回滚行数可以受控调整。
   - 先依赖什么：3.2.1、3.2.2、3.2.3、3.2.4。
   - 开始前先看：`requirements.md` 需求 10；`design.md` §10.3、§10.4、§10.6、§10.7；设置页开发规则；DSH Sidebar、Slot 和 xterm 公开接口。
@@ -301,7 +301,7 @@
   - 先依赖什么：2.4。
   - 开始前先看：`requirements.md` 需求 5、需求 6；`design.md` §3、§6；后台任务接入规范。
   - 主要改哪里：`src/features/tasks/`、`tests/tasks.spec.ts`。
-  - 这一步先不做什么：不调用 CodingNS 父仓库 TaskManager 或 Host 私有接口，不把 task 生命周期塞进 `webTerminals` controller，不创建无限队列。
+  - 这一步先不做什么：不调用 Codingns4DSH 父仓库 TaskManager 或 Host 私有接口，不把 task 生命周期塞进 `webTerminals` controller，不创建无限队列。
   - 怎么算完成：任务启动、输出、取消、断线恢复和模块停用清理都有明确状态与错误；任务 ID 受 HostScope 和 generation 约束。
   - 怎么验证：Fake task runtime 集成测试、断线与取消测试、`pnpm exec tsc --noEmit`。
   - 对应需求：需求 5、需求 6、非功能需求 2
@@ -322,10 +322,10 @@
 
 - [ ] 3.5 接入 PeerHost 代理
   - 状态：TODO
-  - 这一步到底做什么：把 CodingNS 现有 PeerHost 登记、在线检查、登录态和白名单规则接到 `peerhost` 频道。
+  - 这一步到底做什么：把 Codingns4DSH 现有 PeerHost 登记、在线检查、登录态和白名单规则接到 `peerhost` 频道。
   - 做完你能看到什么：当前 Host 可以受控访问一个已登记 PeerHost，Client 不会拿到目标 token。
   - 先依赖什么：2.4、3.4
-  - 开始前先看：`requirements.md` 需求 8；`design.md` §3.3.4、§6.4；CodingNS PeerHost 相关 Spec
+  - 开始前先看：`requirements.md` 需求 8；`design.md` §3.3.4、§6.4；Codingns4DSH PeerHost 相关 Spec
   - 主要改哪里：`src/features/peerhost/`、`src/shared/`、`tests/peerhost.spec.ts`
   - 这一步先不做什么：不把 PeerHost 变成任意 URL 代理；直接 WebRTC 连接和当前 Host 代转回退的选择由后续 HostScope 任务统一实现。
   - 怎么算完成：目标失效、登录态过期、白名单拒绝和资源作用域切换都有测试。
@@ -357,7 +357,7 @@
   - 先依赖什么：3.6
   - 开始前先看：`apps/codingns-proxy` 当前 ticket 和 signaling 契约；`design.md` §2.3.1
   - 主要改哪里：联调脚本、`tests/e2e/`、必要的 Control API 契约适配
-  - 这一步先不做什么：不让 Relay 解析业务消息，不修改旧 CodingNS 客户端行为。
+  - 这一步先不做什么：不让 Relay 解析业务消息，不修改旧 Codingns4DSH 客户端行为。
   - 怎么算完成：直连和 TURN 路径均有成功与失败证据。
   - 怎么验证：真实 Control API/Relay/Host/Client 联调记录；不得把 token 写入日志。
   - 对应需求：需求 1、需求 3、非功能需求 2
@@ -365,7 +365,7 @@
 
 - [ ] 4.2 完成安全、兼容和压力验收
   - 状态：TODO
-  - 这一步到底做什么：验证协议版本、权限、资源清理、慢流、并发流和异常依赖，确认不会破坏现有 CodingNS 隧道。
+  - 这一步到底做什么：验证协议版本、权限、资源清理、慢流、并发流和异常依赖，确认不会破坏现有 Codingns4DSH 隧道。
   - 做完你能看到什么：有一份可交付的验收记录，明确已通过项和剩余风险。
   - 先依赖什么：4.1
   - 开始前先看：`requirements.md` 全文；`design.md` §5、§6、§8；`docs/20260921-DSH多路复用协议草案.md`
@@ -437,7 +437,7 @@
   - 主要改哪里：H5/desktop adapter、`tests/e2e/`、联调记录
   - 这一步先不做什么：不部署独立 DSH 前端，不把远程插件写入本地安装目录。
   - 怎么算完成：登录、ticket 过期、断线、Host 切换、退出和浏览器存储检查均通过。
-  - 怎么验证：`pnpm run build` 生成同级项目 `../dsh-codingns-h5/runtime.js`，`tests/dsh-h5-bootstrap.spec.ts` 通过；浏览器自动化、官方 Desktop、日志/抓包明文审计待完成。
+  - 怎么验证：`pnpm run build` 生成同级项目 `../codingns4dsh-h5/runtime.js`，`tests/dsh-h5-bootstrap.spec.ts` 通过；浏览器自动化、官方 Desktop、日志/抓包明文审计待完成。
 
 ### 阶段检查
 

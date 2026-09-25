@@ -34,7 +34,7 @@
 
 ## 需求 3：把指定进程服务接入插件反向代理
 
-用户希望从 CodingNS 访问已经启动的本机开发服务，而不让浏览器直接连接 Host 或任意本机地址。
+用户希望从 Codingns4DSH 访问已经启动的本机开发服务，而不让浏览器直接连接 Host 或任意本机地址。
 
 ### 验收标准
 
@@ -49,7 +49,7 @@
 - Client 只发送 Workspace、Session、配置项和运行实例标识；Host 重新校验归属、路径和进程身份。
 - 不向浏览器暴露 Host token、refresh token、秘密环境变量、任意绝对路径或未脱敏命令环境。
 - 所有异步状态带 generation；旧 generation 的结果不得回写当前页面。
-- 不修改 DSH 核心，不覆盖默认 `connection`，不让浏览器直连 CodingNS Host。
+- 不修改 DSH 核心，不覆盖默认 `connection`，不让浏览器直连 Codingns4DSH Host。
 
 ## 非目标
 

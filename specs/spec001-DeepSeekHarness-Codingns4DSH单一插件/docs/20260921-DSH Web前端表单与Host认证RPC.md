@@ -2,7 +2,7 @@
 
 ## 已实现
 
-`src/client/index.ts` 现在向 DSH Web 的 `settings.section` 注册 CodingNS 设置区块，包含：
+`src/client/index.ts` 现在向 DSH Web 的 `settings.section` 注册 Codingns4DSH 设置区块，包含：
 
 - Control API 地址；
 - 邮箱和密码登录表单；
@@ -20,7 +20,7 @@
 access token 和 refresh token 不出 Host RPC 响应。
 
 当前凭据存储使用 `InMemoryCodingNsCredentialStore`，用于本轮端到端测试；DSH Host 重启后不会保留
-登录态。接入生产发行前必须替换为 DSH/CodingNS 的安全凭据存储实现。
+登录态。接入生产发行前必须替换为 DSH/Codingns4DSH 的安全凭据存储实现。
 
 ## 验证
 

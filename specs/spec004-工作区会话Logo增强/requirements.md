@@ -4,7 +4,7 @@
 
 ## 简介
 
-DSH 原生工作区列表不会显示会话由哪个 Agent 处理。CodingNS 已在 Host 保存 `dshSessionId -> adapterId` 绑定，本功能只把这份已有关系显示到原生会话行，不复制 WorkspaceBrowser，也不改变会话标题。
+DSH 原生工作区列表不会显示会话由哪个 Agent 处理。Codingns4DSH 已在 Host 保存 `dshSessionId -> adapterId` 绑定，本功能只把这份已有关系显示到原生会话行，不复制 WorkspaceBrowser，也不改变会话标题。
 
 ## 术语表
 

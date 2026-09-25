@@ -1,4 +1,4 @@
-# 任务清单 - DeepSeek Harness 的 CodingNS 单一插件（人话版）
+# 任务清单 - Codingns4DSH 单一插件（人话版）
 
 状态：阶段 0 骨架和发行装配已完成；用户定义阶段 1～4 已有实现记录；真实 Transport、远程 Web Runtime、多 Host 和 H5/Desktop 联调仍未完成。
 
@@ -7,12 +7,12 @@
 - [x] 0.1 确认 DSH 插件包结构与启动期 Transport 装配
   - 状态：DONE
   - 已完成：读取 DSH `ddefc45fbc7f8e46dd73185e68295696d1297887` 的 manifest、Bundle、Profile、Client module 和 Connection 源码，并用本机 `dsh 0.1.6-alpha.2` 临时 Profile 回放 Bundle 识别。
-  - 采用方案：独立 CodingNS Profile + `engines.dsh` 精确锁定 + `dsh-codingns/bootstrap` pre-Cordis 启动胶水 + `dsh-codingns` Bundle。普通动态插件不覆盖默认 Connection。
+  - 采用方案：独立 Codingns4DSH Profile + `engines.dsh` 精确锁定 + `codingns4dsh/bootstrap` pre-Cordis 启动胶水 + `codingns4dsh` Bundle。普通动态插件不覆盖默认 Connection。
   - 验证命令：`git ls-remote https://github.com/deepseek-ai/deepseek-harness.git HEAD refs/heads/master`、`dsh --version`、临时 `DSH_HOME dsh plugin --profile stage0 add ...`、`dsh --profile stage0 --dump-config`、`pnpm test -- tests/manifest.spec.ts tests/bootstrap.spec.ts`；结果已写入 `docs/20260921-阶段0-DSH插件装配调查.md`。
 
 - [x] 0.2 建立插件包骨架
   - 状态：DONE
-  - 结果：`dsh-codingns` package manifest、Bundle patch、Host/Client/Shared 出口、`./bootstrap` 出口和独立 Profile 已创建。根据 DSH `0.1.6-alpha.2` 的 Client Loader 实际实现，`exports["./client"]` 使用 `default` 条件指向浏览器构建产物，确保 Web boot graph 能发现 Client entry。
+  - 结果：`codingns4dsh` package manifest、Bundle patch、Host/Client/Shared 出口、`./bootstrap` 出口和独立 Profile 已创建。根据 DSH `0.1.6-alpha.2` 的 Client Loader 实际实现，`exports["./client"]` 使用 `default` 条件指向浏览器构建产物，确保 Web boot graph 能发现 Client entry。
   - 验证命令：`pnpm test -- tests/manifest.spec.ts tests/client-entry.spec.ts`；结果：6 个定向测试通过。
 
 - [x] 0.3 建立 Host / Client 双入口
@@ -32,7 +32,7 @@
 
 - [x] 0.6 建立最小 Bundle 和 Profile
   - 状态：DONE
-  - 结果：Bundle 使用真实 `dsh.bundle.patch` 结构，独立 Profile 使用真实 `dsh.profile.bundles` 结构并精确锁定 `dsh-codingns@0.1.0` 和 DSH `0.1.6-alpha.2`；没有注入未实现业务。
+  - 结果：Bundle 使用真实 `dsh.bundle.patch` 结构，独立 Profile 使用真实 `dsh.profile.bundles` 结构并精确锁定 `codingns4dsh@0.1.0` 和 DSH `0.1.6-alpha.2`；没有注入未实现业务。
   - 验证命令：`pnpm test -- tests/manifest.spec.ts`；结果：通过。
 
 - [x] 0.7 阶段 0 最小测试与兼容错误
@@ -60,7 +60,7 @@
 - [x] 1.1 确认 DSH 启动期 Transport 装配入口
   - 状态：DONE（装配方式已确定，真实 Transport 尚未实现）
   - 这一步到底做什么：确认 `ClientTransportHooks`、`installConnection()`、Profile、client entry、Host entry 和 pre-Cordis 启动胶水的装配方式。
-  - 做完你能看到什么：一份可运行的最小启动胶水配置，能证明外部提供的 Transport 在默认 Connection 之前登记；真实 CodingNS Transport 仍属于后续任务。
+  - 做完你能看到什么：一份可运行的最小启动胶水配置，能证明外部提供的 Transport 在默认 Connection 之前登记；真实 Codingns4DSH Transport 仍属于后续任务。
   - 先依赖什么：无
   - 开始前先看：
     - `requirements.md` 需求 1、需求 3
@@ -125,7 +125,7 @@
 - [x] 2.1 实现信令、WebRTC 和指纹校验
   - 状态：IN_REVIEW（浏览器侧 Fake/接口注入已通过；真实 Host/Relay 联调未完成）
   - 这一步到底做什么：实现 Relay Signaling ticket、ICE/TURN、DataChannel 和 Host fingerprint 校验。
-  - 做完你能看到什么：Client 可以建立一个已经完成身份校验的 CodingNS DataChannel。
+  - 做完你能看到什么：Client 可以建立一个已经完成身份校验的 Codingns4DSH DataChannel。
   - 先依赖什么：1.3
   - 开始前先看：
     - `requirements.md` 需求 3
@@ -196,7 +196,7 @@
 - [ ] 2.4 远程连接主链路检查
   - 状态：TODO
   - 这一步到底做什么：验证从登录到远程 DSH RPC、文件流、断线恢复的完整主链路。
-  - 做完你能看到什么：一台 Client 能稳定访问一台 CodingNS Host 上的 DSH。
+  - 做完你能看到什么：一台 Client 能稳定访问一台 Codingns4DSH Host 上的 DSH。
   - 先依赖什么：2.1、2.2、2.3
   - 开始前先看：`requirements.md`、`design.md`、`tasks.md`
   - 主要改哪里：本阶段全部 Transport 文件
@@ -208,7 +208,7 @@
 
 - [ ] 3.1 接入工作区文件树和预览
   - 状态：TODO
-  - 这一步到底做什么：把 CodingNS 工作区读取能力挂到 DSH Remote，并提供 Client 文件树和预览入口。
+  - 这一步到底做什么：把 Codingns4DSH 工作区读取能力挂到 DSH Remote，并提供 Client 文件树和预览入口。
   - 做完你能看到什么：可以浏览目录、打开文本和图片预览，越界路径会被拒绝。
   - 先依赖什么：2.4
   - 开始前先看：`requirements.md` 需求 6
@@ -222,16 +222,16 @@
   - 这一步到底做什么：由插件自身实现 DSH `webTerminals` 兼容 controller、终端强化设置、持久映射、POSIX tmux、Windows ConPTY broker、生命周期协调和平台 shell 检测；后台任务使用独立 `task` 频道。
   - 做完你能看到什么：可以在插件挂载到 DSH Sidebar 的终端 UI 创建持久终端、输入命令、调整尺寸、显式关闭，并在浏览器、插件或 DSH 重启后重新 attach 到同一运行时；设置页可以控制下次启动是否启用强化，并选择默认终端与外观。
   - 先依赖什么：2.4
-  - 开始前先看：`requirements.md` 需求 6；`../spec002-基于CodingNS隧道的DSH多路复用网关/design.md` §10；同 Spec 的 `tasks.md` 3.2.1～3.2.6。
+  - 开始前先看：`requirements.md` 需求 6；`../spec002-基于Codingns4DSH隧道的DSH多路复用网关/design.md` §10；同 Spec 的 `tasks.md` 3.2.1～3.2.6。
   - 主要改哪里：以 Spec 002 的 3.2.1～3.2.6 和独立后台任务任务为准，本任务不再维护第二份实现清单。
-  - 当前约束：DSH Web 是唯一主体；插件不得调用 CodingNS 父仓库或 Host 私有接口。浏览器不得直连本机 broker。官方 Host controller 与官方 terminal UI 成对禁用，插件在同一 Bundle generation 内原子提供 Typert、Host controller、`webTerminals` 与 Sidebar UI。
+  - 当前约束：DSH Web 是唯一主体；插件不得调用 Codingns4DSH 父仓库或 Host 私有接口。浏览器不得直连本机 broker。官方 Host controller 与官方 terminal UI 成对禁用，插件在同一 Bundle generation 内原子提供 Typert、Host controller、`webTerminals` 与 Sidebar UI。
   - 这一步先不做什么：不承诺跨操作系统重启，不创建新的全局 inflight、timer 或重试队列，不创建脱离 DSH Web 的独立终端应用。
   - 怎么算完成：Spec 002 的 3.2.1～3.2.6 全部为 `DONE`，后台任务频道也完成独立验收；终端显式关闭、任务取消、崩溃恢复和资源回收均有证据。
   - 怎么验证：以 Spec 002 各子任务记录的定向测试、启停待重启测试、默认 profile 与样式作用域测试、三平台 DSH 重启验证和 Sidebar UI 回放为准。
 
 - [ ] 3.3 接入外部 Agent Provider
   - 状态：IN_REVIEW（标准层、八个协议驱动、持久化外部会话和 DSH 原生会话接入已完成；真实 CLI/远程端到端执行仍待复核）
-  - 这一步到底做什么：将 CodingNS 现有外部 Agent 统一成 DSH 可调用的 Provider，并允许每个 Agent 单独开关。
+  - 这一步到底做什么：将 Codingns4DSH 现有外部 Agent 统一成 DSH 可调用的 Provider，并允许每个 Agent 单独开关。
   - 做完你能看到什么：不同外部 Agent 可以在同一工作区启动、输入、查看输出和取消。
   - 先依赖什么：3.2
   - 开始前先看：`requirements.md` 需求 5
@@ -390,11 +390,11 @@
   - 主要改哪里：`src/client/h5-bootstrap/`、控制站集成契约、H5 测试
   - 这一步先不做什么：不部署独立固定版本 DSH 前端，不把业务请求转给控制站。
   - 怎么算完成：未登录、ticket 过期、WebRTC 失败和退出登录都有清理行为。
-  - 怎么验证：`pnpm run build` 生成同级项目 `../dsh-codingns-h5/runtime.js`；`tests/dsh-h5-bootstrap.spec.ts` 通过。浏览器自动化、真实控制站/Relay 明文审计待完成。
+  - 怎么验证：`pnpm run build` 生成同级项目 `../codingns4dsh-h5/runtime.js`；`tests/dsh-h5-bootstrap.spec.ts` 通过。浏览器自动化、真实控制站/Relay 明文审计待完成。
 
 - [ ] 5.5 接入官方 Desktop Client 模式
   - 状态：TODO
-  - 这一步到底做什么：在官方 DSH Desktop 中注入 `dsh-codingns` Client Transport，并让远程 Host 以 PeerHost 会话出现在连接和会话列表中。
+  - 这一步到底做什么：在官方 DSH Desktop 中注入 `codingns4dsh` Client Transport，并让远程 Host 以 PeerHost 会话出现在连接和会话列表中。
   - 做完你能看到什么：不自行打包 Win/macOS，也能从 Desktop 完整使用远程 Host 的 DSH 环境。
   - 先依赖什么：5.1、5.2、5.3
   - 主要改哪里：Desktop Client adapter、`src/client/host-context/`、Desktop 联调测试
@@ -427,7 +427,7 @@
   - 验证：`pnpm test -- tests/resource-scope.spec.ts`；7 个子测试通过。
 - [x] 用户阶段 4：WebRTC 到 DSH Transport（IN_REVIEW）
   - 验证：`pnpm test -- tests/transport.spec.ts tests/webrtc-client.spec.ts tests/webrtc-host.spec.ts`；10 个子测试通过。
-  - 补充验证：全量阶段定向测试 52/52 通过；`pnpm exec tsc --noEmit` 通过；`npm pack --dry-run --json` 成功；本机 DSH `0.1.6-alpha.2` 临时 Profile `--dump-config` 能识别 `dsh-codingns`。
+  - 补充验证：全量阶段定向测试 52/52 通过；`pnpm exec tsc --noEmit` 通过；`npm pack --dry-run --json` 成功；本机 DSH `0.1.6-alpha.2` 临时 Profile `--dump-config` 能识别 `codingns4dsh`。
   - generation 边界：DSH API Gateway 已独占 `ConnectionGenerationSource` 和 `connection.start()`；普通 Client entry 不重复注册或启动 generation loop。`bindDshConnection*` 仅供显式 adapter 测试/独立运行时。
   - 残余风险：已增加 Host acceptor、generation adapter 和可注入背压契约，但真实 Relay/Control API、werift Host runtime、DSH/Host/Browser 端到端链路、Host carrier replacement、内部 channel envelope 和生产级窗口调度仍待联调。
 
@@ -438,7 +438,7 @@
 - [ ] 4.6 阶段二最终验收
   - 状态：TODO
   - 这一步到底做什么：确认需求、设计、任务和验证证据一一对应，形成可交付的阶段二结果。
-  - 做完你能看到什么：一个版本化的 `dsh-codingns` 插件发行包，以及完整的登录、连接、功能和安全验收记录。
+  - 做完你能看到什么：一个版本化的 `codingns4dsh` 插件发行包，以及完整的登录、连接、功能和安全验收记录。
   - 先依赖什么：2.4、3.5、4.5
   - 开始前先看：`requirements.md`、`design.md`、`tasks.md`、`docs/`
   - 主要改哪里：当前 Spec 全部文件、验收文档和发布清单

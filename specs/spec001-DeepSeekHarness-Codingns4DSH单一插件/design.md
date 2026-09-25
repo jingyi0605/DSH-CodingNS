@@ -1,17 +1,17 @@
-# 设计文档 - DeepSeek Harness 的 CodingNS 单一插件
+# 设计文档 - Codingns4DSH 单一插件
 
 状态：Draft。阶段 0 已验证插件骨架、Profile、Host/Client 出口和启动装配；真实远端连接、远程 Web Runtime、多 Host 聚合和业务模块仍未完成。
 
 ## 1. 总体原则
 
-DSH 是唯一主体宿主。`dsh-codingns` 是一个同时包含 Host half、Client half、Transport 和可选模块的 Bundle。插件不复制 DSH Web，不替换官方 Desktop，也不要求用户把其他 DSH 插件重新安装一遍。
+DSH 是唯一主体宿主。`codingns4dsh` 是一个同时包含 Host half、Client half、Transport 和可选模块的 Bundle。插件不复制 DSH Web，不替换官方 Desktop，也不要求用户把其他 DSH 插件重新安装一遍。
 
 控制面和数据面分开：`apps/codingns-proxy` 只做 Auth、Device、Host binding、短期 ticket、Relay signaling、Tailscale、Multi-Host 和状态统计；业务数据由 DSH Client 与目标 Host 通过 WebRTC DataChannel 端到端传输。
 
 数据面固定为三层：
 
 ```text
-CodingNS WebRTC / HTTP / WebSocket Tunnel
+Codingns4DSH WebRTC / HTTP / WebSocket Tunnel
   -> DSH Multiplex Transport（单 WebSocket、多逻辑流、统一 Envelope）
     -> DSH / CLI / PTY / Task / File / Port / PeerHost / Web 模块
 ```
@@ -25,8 +25,8 @@ DSH Runtime
   ├── 官方 DSH Web / Desktop UI
   ├── 官方 DSH Profile
   ├── 用户安装的其他 DSH 插件
-  └── dsh-codingns Host half
-       ├── CodingNS Auth / Device / Host binding
+  └── codingns4dsh Host half
+       ├── Codingns4DSH Auth / Device / Host binding
        ├── WebRTC Host Gateway
        ├── CLI / 文件 / 自有 PTY / Task / Process / Port
        ├── PeerHost Registry / Proxy
@@ -41,7 +41,7 @@ H5 部署的只是控制站 Bootstrap，不是固定版本的 DSH 前端：
 浏览器
   -> 控制站 HttpOnly 会话或一次性访问码
   -> H5 Bootstrap
-  -> dsh-codingns Client Transport
+  -> codingns4dsh Client Transport
   -> WebRTC DataChannel（Relay 只转发加密流量）
   -> 远程 DSH Host Gateway
   -> web.session.open / web.boot.get / web.asset.get
@@ -62,7 +62,7 @@ DSH Desktop Shell
        每个 Context 独立拥有：Client、Connection、HostScope、generation、Plugin Loader
 ```
 
-用户在 Desktop 安装一次 `dsh-codingns` Client 即可访问远程 Host。只有未来需要系统托盘、后台 WebRTC、原生通知或统一升级时，才评估自建 Desktop Edition。
+用户在 Desktop 安装一次 `codingns4dsh` Client 即可访问远程 Host。只有未来需要系统托盘、后台 WebRTC、原生通知或统一升级时，才评估自建 Desktop Edition。
 
 ## 3. HostScope 与资源模型
 
@@ -136,7 +136,7 @@ Client 处理规则：
 | `feature-registry` | 模块依赖、启停、权限和资源清理 |
 | `host-router` | 多 HostScope、连接、会话聚合和 Context 路由 |
 | `remote-dsh-web-runtime` | 远程 Web boot、资源、插件 Manifest/Bundle 和 WebSocket |
-| `cli-adapters` | CodingNS CLI Provider 的统一启动、输入、输出和退出 |
+| `cli-adapters` | Codingns4DSH CLI Provider 的统一启动、输入、输出和退出 |
 | `workspace-files` | 工作区树、预览和文件流 |
 | `terminal` | DSH `webTerminals` 兼容 controller、终端强化设置、持久映射、tmux、ConPTY broker、attach 与显式关闭 |
 | `task` | 插件自有后台任务、恢复和取消；不与终端生命周期混用 |
@@ -166,7 +166,7 @@ DataChannel 或任一底层流断开时，当前 generation 立即失效。由 D
 
 ### 6.4 PeerHost
 
-PeerHost 记录、目标 Host 检查、目标登录态和白名单规则沿用 CodingNS 既有实现。直接 WebRTC 失败时，才允许当前 Host 通过受控 HTTP/WS Proxy 代转；当前 Host 会看到业务明文，因此该路径必须标为受信任回退，控制站和 Relay 仍不能看到明文。
+PeerHost 记录、目标 Host 检查、目标登录态和白名单规则沿用 Codingns4DSH 既有实现。直接 WebRTC 失败时，才允许当前 Host 通过受控 HTTP/WS Proxy 代转；当前 Host 会看到业务明文，因此该路径必须标为受信任回退，控制站和 Relay 仍不能看到明文。
 
 ## 7. 核心协议数据
 
@@ -193,7 +193,7 @@ interface DshEnvelope {
 - 控制站和 Relay 只处理账号、设备、binding、ticket、SDP/ICE、在线状态和统计，禁止解析 Envelope。
 - 连接失败、版本不兼容、fingerprint 变化、模块停用和权限拒绝都使用稳定错误码并记录脱敏日志。
 - 远程 Web Runtime 必须校验 HostScope、generation、Manifest 版本和 Bundle 来源；不能让远程 Bundle 写入本地 Profile。
-- `dsh-codingns` 必须遵守 DSH 官方插件加载契约，保留其他插件的加载顺序和命名空间。
+- `codingns4dsh` 必须遵守 DSH 官方插件加载契约，保留其他插件的加载顺序和命名空间。
 
 ## 9. 验证策略
 

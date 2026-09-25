@@ -7,14 +7,14 @@
 ### 1.1 目标
 
 - 用一个能力注册表集中维护 DSH 版本、公开 API 能力和适配器路由。
-- 让现有和未来 Feature 只依赖 CodingNS 内部能力接口，不直接依赖 DSH 版本差异。
+- 让现有和未来 Feature 只依赖 Codingns4DSH 内部能力接口，不直接依赖 DSH 版本差异。
 - 让 Host 与 Client 在启动时生成一次能力画像，并将能力结果路由给 FeatureRegistry。
 - 让旧 DSH 接口的弃用、退休和删除都有可验证的记录。
 
 ### 1.2 覆盖需求
 
 - `requirements.md` 需求 1：集中维护 DSH 能力矩阵。
-- `requirements.md` 需求 2：功能模块只依赖 CodingNS 内部能力接口。
+- `requirements.md` 需求 2：功能模块只依赖 Codingns4DSH 内部能力接口。
 - `requirements.md` 需求 3：能力缺失降级。
 - `requirements.md` 需求 4：单版本支持 DSH 0.1.5、0.1.6、0.1.7。
 - `requirements.md` 需求 5：旧能力退休。
@@ -68,8 +68,8 @@ Host/Client 功能模块
 | --- | --- | --- | --- |
 | `DshCapabilityRegistry` | 注册路由、选择适配器、生成诊断 | DSH 版本、运行时 Context | `DshCapabilityProfile` |
 | `DshCompatibilityMatrix` | 声明能力版本范围和生命周期 | 静态路由定义 | 可检查的矩阵 |
-| Host adapters | 把 Host DSH API 转成 CodingNS 内部服务 | Host Context | Host capability service |
-| Client adapters | 把 Client DSH API 转成 CodingNS 内部服务 | Client Context | Client capability service |
+| Host adapters | 把 Host DSH API 转成 Codingns4DSH 内部服务 | Host Context | Host capability service |
+| Client adapters | 把 Client DSH API 转成 Codingns4DSH 内部服务 | Client Context | Client capability service |
 | `DshCapabilityProfile` | 缓存一次启动的能力结果 | Registry resolution | capability lookup |
 | `FeatureRegistry` | 检查能力要求并管理模块 | Profile、Feature descriptor | 模块状态和资源 |
 | Compatibility diagnostics | 输出选择、降级、拒绝和退休信息 | Profile、Feature 状态 | 日志、测试、诊断 DTO |

@@ -1,18 +1,18 @@
 <div align="center">
 
-# DSH-CodingNS for DeepSeek Harness
+# Codingns for DeepSeek Harness
 
 **把外部 Agent CLI、持久终端、工作区调试和远程访问，装进 DSH 原生界面。**
 
-[![npm version](https://img.shields.io/npm/v/dsh-codingns?logo=npm)](https://www.npmjs.com/package/dsh-codingns)
+[![npm version](https://img.shields.io/npm/v/codingns4dsh?logo=npm)](https://www.npmjs.com/package/codingns4dsh)
 [![DSH compatibility](https://img.shields.io/badge/DSH-%3E%3D0.1.5--rc.3%20%3C0.1.8--0-4D6BFE)](https://github.com/deepseek-ai/deepseek-harness)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.19-3C873A?logo=node.js&logoColor=white)](https://nodejs.org)
 
 **简体中文** · [English](README.en.md)
 
-**当前版本 `dsh-codingns@0.1.1`** · DSH **`>=0.1.5-rc.3 <0.1.8-0`**（已验证 `0.1.6-alpha.2`）· Node **`>= 22.19`** · macOS / Linux / Windows
+**当前版本 `codingns4dsh@0.1.1`** · DSH **`>=0.1.5-rc.3 <0.1.8-0`**（已验证 `0.1.6-alpha.2`）· Node **`>= 22.19`** · macOS / Linux / Windows
 
-**[GitHub](https://github.com/jingyi0605/DSH-CodingNS)** · **[npm](https://www.npmjs.com/package/dsh-codingns)** · **QQ 群 1092985965**
+**[GitHub](https://github.com/jingyi0605/Codingns4DSH)** · **[npm](https://www.npmjs.com/package/codingns4dsh)** · **QQ 群 1092985965**
 
 <p>
   <a href="#界面预览">界面预览</a> ·
@@ -40,11 +40,11 @@
 
 ## 这是什么
 
-**DSH（DeepSeek Harness）** 是 DeepSeek 的编码 Agent 运行框架，由 CLI 和 Web 界面组成，在你的 Workspace 中运行 Agent 循环。
+**DSH（DeepSeek Harness）** 是一个编码 Agent 运行框架，由 CLI 和 Web 界面组成，在你的 Workspace 中运行 Agent 循环。
 
-**DSH-CodingNS 是一个 DSH 插件 Bundle**（Host 层 + 浏览器层），提供七个模块，全部在 **设置 → CodingNS** 中配置。
+**Codingns4DSH 是一个 DSH 插件 Bundle**（Host 层 + 浏览器层），提供七个模块，全部在 **设置 → Codingns4DSH** 中配置。
 
-> 名称说明：本插件名为 **DSH-CodingNS**（npm 包 `dsh-codingns`，设置页入口显示为 CodingNS）；文中单独出现的 **CodingNS** 指提供 Control API、账号与中继隧道的平台服务。
+> 名称说明：本插件名为 **Codingns4DSH**（npm 包 `codingns4dsh`，设置页入口显示为 Codingns4DSH）；文中单独出现的 **Codingns4DSH** 指提供 Control API、账号与中继隧道的平台服务。
 
 | 模块 | 作用 | 默认 |
 | --- | --- | :---: |
@@ -60,7 +60,7 @@ DSH 原生部分不会被替换：对话、会话列表、侧栏、设置、权�
 
 一切都跑在 **Host（你的电脑）** 上：Agent 进程、终端、文件、局域网/中继监听；浏览器只是视图。Agent CLI 作为 DSH 子进程使用自己的凭据与上游，模型流量不经过插件。远程访问全部可用。
 
-补充说明：DSH-CodingNS 装好后侧栏终端就已存在，**终端强化** 只是把它从基础本地 PTY 切换为持久后端（macOS/Linux 用 tmux，Windows 用 ConPTY），重启后生效；在 DSH `0.1.5.x` 上 DSH-CodingNS 运行于兼容模式（无多 Tab 与 Shell 选择），卡片会给出提示；**工作区调试** 目前界面文案只有中文。
+补充说明：Codingns4DSH 装好后侧栏终端就已存在，**终端强化** 只是把它从基础本地 PTY 切换为持久后端（macOS/Linux 用 tmux，Windows 用 ConPTY），重启后生效；在 DSH `0.1.5.x` 上 Codingns4DSH 运行于兼容模式（无多 Tab 与 Shell 选择），卡片会给出提示；**工作区调试** 目前界面文案只有中文。
 
 ---
 
@@ -81,7 +81,7 @@ DSH 原生部分不会被替换：对话、会话列表、侧栏、设置、权�
 
 **模型** 模型列表 · **流式** 实时输出 · **恢复** 重启后继续 · **打断** 取消当前回合 · **工具** 对话中渲染工具调用 · **思考** 推理/思考强度 · **用量** token 或订阅额度 · **权限确认 / 提问** 变成 DSH 原生交互 · **插话** 回合中追加消息。
 
-未列出的能力表示该 CLI 或其版本不支持；Agent 的安装与登录都在 DSH 之外完成，DSH-CodingNS 不保存 Agent 凭据。
+未列出的能力表示该 CLI 或其版本不支持；Agent 的安装与登录都在 DSH 之外完成，Codingns4DSH 不保存 Agent 凭据。
 
 ---
 
@@ -89,7 +89,7 @@ DSH 原生部分不会被替换：对话、会话列表、侧栏、设置、权�
 
 ### 外部 Agent 集成
 
-在选择器里挑选 Agent 与模型后，DSH-CodingNS 以 DSH 子进程方式启动（或恢复）该 CLI，并把事件流投影成原生会话；模型与思考强度按 Agent 记忆。
+在选择器里挑选 Agent 与模型后，Codingns4DSH 以 DSH 子进程方式启动（或恢复）该 CLI，并把事件流投影成原生会话；模型与思考强度按 Agent 记忆。
 
 <div align="center">
   <img width="70%" src="assets/screenshots/model-picker.jpg" alt="Codex 的模型列表">
@@ -121,7 +121,7 @@ DSH 原生部分不会被替换：对话、会话列表、侧栏、设置、权�
 
 设置页按模块渲染卡片，开关、说明和「是否需要重启」都来自模块自身的描述；终端外观、局域网映射、登录保护、中转账号等都在对应卡片内配置。
 
-| <img src="assets/screenshots/settings-overview.jpg" alt="设置 → CodingNS 模块卡片"> | <img src="assets/screenshots/settings-modules.jpg" alt="全部模块开关"> |
+| <img src="assets/screenshots/settings-overview.jpg" alt="设置 → Codingns4DSH 模块卡片"> | <img src="assets/screenshots/settings-modules.jpg" alt="全部模块开关"> |
 | --- | --- |
 | 每个模块一张卡片，右侧是启停开关 | 七个模块与底部版本信息 |
 
@@ -140,9 +140,9 @@ DSH 原生部分不会被替换：对话、会话列表、侧栏、设置、权�
 | | 局域网访问 | 中转访问服务 |
 | --- | --- | --- |
 | 从哪里连接 | 同一局域网 | **任何设备、互联网上的任何位置** |
-| 前提 | 同一网络 + 放行监听端口 | Host 能通过 HTTPS 访问 Control API；设备能连上 CodingNS 入口 |
+| 前提 | 同一网络 + 放行监听端口 | Host 能通过 HTTPS 访问 Control API；设备能连上 Codingns4DSH 入口 |
 | 是否暴露本地端口 | 是——所选网卡/端口（默认 `13080`） | 否——独立设备隧道 |
-| 账号 | 可选登录保护 | 需要 CodingNS 账号并绑定 Host |
+| 账号 | 可选登录保护 | 需要 Codingns4DSH 账号并绑定 Host |
 
 **局域网**：选择监听网卡与端口，自动探测（或手动填写）本机 DSH Web 端口，启动后在另一台设备打开 `http://<局域网 IP>:<端口>`；开启自动启动可恢复映射，模块还会补齐明文 HTTP 来源所需的 `crypto.randomUUID`。
 
@@ -164,7 +164,7 @@ DSH 设置按钮旁的账户入口会显示登录状态、访问路径与延迟�
 
 - 载荷走在 **DSH Client 与 DSH Host 之间的 WebRTC DataChannel，由 DTLS 保护**；无论直连还是经 TURN，Relay 都只承载密文。
 - Relay 与控制站只处理**控制面元数据**：账号/设备记录、Host 绑定、ticket、SDP/ICE 信令、在线状态、流量统计。
-- 每个 Host 自持 DTLS 证书（`~/.config/dsh-codingns/dtls-identity.json`）并发布 SHA-256 指纹，远端在握手时核对；不一致直接中断（`Host DTLS fingerprint 校验失败`），不会接受被替换的证书；同一指纹显示在中转卡片中供人工比对。
+- 每个 Host 自持 DTLS 证书（`~/.config/codingns4dsh/dtls-identity.json`）并发布 SHA-256 指纹，远端在握手时核对；不一致直接中断（`Host DTLS fingerprint 校验失败`），不会接受被替换的证书；同一指纹显示在中转卡片中供人工比对。
 - 密码只用于登录请求；refresh token 与设备凭据留在 Host。诊断日志只记录协议元数据（方向、类型、流 ID、状态、字节数），不记录正文、票据、Cookie 或 DSH Web 内容。
 
 ---
@@ -173,36 +173,36 @@ DSH 设置按钮旁的账户入口会显示登录状态、访问路径与延迟�
 
 **环境要求**：DSH 在 `>=0.1.5-rc.3 <0.1.8-0` 范围内（插件与 DSH 版本独立发布，安装期与运行期都会拒绝不兼容版本）· Node.js `>= 22.19` · `PATH` 中有 `pnpm`（`dsh plugin` 转发给 pnpm）· 可选：Agent CLI，以及 macOS/Linux 上用于持久终端的 `tmux`（`brew install tmux` / `sudo apt install tmux`）。
 
-DSH-CodingNS 需要 Profile 同时包含 DSH Web 应用层，因此先用官方 `web` 模板创建 Profile：
+Codingns4DSH 需要 Profile 同时包含 DSH Web 应用层，因此先用官方 `web` 模板创建 Profile：
 
 ```bash
 dsh codingns --from-default-profile web --dump-config   # 创建 Profile（只打印层结构，不启动）
-dsh plugin --profile codingns add dsh-codingns@0.1.1    # 安装 Bundle
+dsh plugin --profile codingns add codingns4dsh@0.1.1    # 安装 Bundle
 dsh codingns                                            # 启动 DSH
 ```
 
-也可直接装进标准 `web` Profile：`dsh plugin --profile web add dsh-codingns@0.1.1`，然后 `dsh web`。
+也可直接装进标准 `web` Profile：`dsh plugin --profile web add codingns4dsh@0.1.1`，然后 `dsh web`。
 
 - **不要**把 `dsh plugin --profile <新名字> add …` 当作新 Profile 的第一条命令：全新自定义 Profile 只含 `@deepseek-ai/dsh-base`，会报 `entry "terminal-controller" not found` 且没有浏览器界面。
 - npm 返回 404 说明该版本还没发布，请改用下面的源码安装。
 
 ```bash
 # 验证
-dsh plugin --profile codingns list --depth 0     # -> dsh-codingns <版本>
-dsh --profile codingns --dump-config             # 应看到 id: dsh-codingns，terminal-controller 为 disabled
+dsh plugin --profile codingns list --depth 0     # -> codingns4dsh <版本>
+dsh --profile codingns --dump-config             # 应看到 id: codingns4dsh，terminal-controller 为 disabled
 
 # 升级、固定版本、卸载（之后重启 DSH）
-dsh plugin --profile codingns add dsh-codingns@<版本>
-dsh plugin --profile codingns remove dsh-codingns
+dsh plugin --profile codingns add codingns4dsh@<版本>
+dsh plugin --profile codingns remove codingns4dsh
 ```
 
 **从源码安装**（npm 不可用，或直接运行本地检出）：
 
 ```bash
-git clone https://github.com/jingyi0605/DSH-CodingNS.git && cd DSH-CodingNS
+git clone https://github.com/jingyi0605/Codingns4DSH.git && cd Codingns4DSH
 pnpm install && pnpm build
 dsh codingns --from-default-profile web --dump-config
-dsh plugin --profile codingns add "$PWD"            # 或 npm pack 后 add ./dsh-codingns-0.1.1.tgz
+dsh plugin --profile codingns add "$PWD"            # 或 npm pack 后 add ./codingns4dsh-0.1.1.tgz
 ```
 
 安装目录是链接依赖，改完源码后重新 `pnpm build`（或保持 `pnpm dev:watch`）并重启 DSH。
@@ -212,8 +212,8 @@ dsh plugin --profile codingns add "$PWD"            # 或 npm pack 后 add ./dsh
 | 路径 | 内容 |
 | --- | --- |
 | `$DSH_HOME/profiles/<profile>` | 已安装的插件包与 `dsh.profile.bundles` |
-| `$DSH_HOME/dsh-codingns/` | 终端 `host-id` 与 `terminals.json`（恢复映射） |
-| `~/.config/dsh-codingns/` | 中转凭据、DTLS 身份、登录保护哈希 |
+| `$DSH_HOME/codingns4dsh/` | 终端 `host-id` 与 `terminals.json`（恢复映射） |
+| `~/.config/codingns4dsh/` | 中转凭据、DTLS 身份、登录保护哈希 |
 | `<工作区>/.codingns/debug.json` | 调试启动配置（`0600`，拒绝保存密钥） |
 
 ---
@@ -221,7 +221,7 @@ dsh plugin --profile codingns add "$PWD"            # 或 npm pack 后 add ./dsh
 ## 首次使用
 
 1. `dsh codingns` 打开 DSH Web 界面。
-2. 打开 **设置 → CodingNS** 查看模块卡片（需重启的模块会同时显示当前生效状态与下次启动目标）。
+2. 打开 **设置 → Codingns4DSH** 查看模块卡片（需重启的模块会同时显示当前生效状态与下次启动目标）。
 3. 在 DSH **之外** 安装并登录 Agent CLI，确保命令在 Host 的 `PATH` 中，然后在 **外部Agent集成** 中启用。
 4. 在输入框选择 Agent、模型和思考强度并发送消息——输出流式写入原生会话，并带 Agent Logo 出现在侧栏。
 5. 右侧栏：终端面板为当前工作区开终端（要持久化请启用 **终端强化** 后重启）；**调试** 面板添加启动配置并查看端口。
@@ -231,14 +231,14 @@ dsh plugin --profile codingns add "$PWD"            # 或 npm pack 后 add ./dsh
 
 ## 故障排查
 
-- **版本** —— `dsh --version`、`dsh plugin --profile codingns list --depth 0`、`npm view dsh-codingns version`；安装与启动都会拒绝范围外的 DSH。
+- **版本** —— `dsh --version`、`dsh plugin --profile codingns list --depth 0`、`npm view codingns4dsh version`；安装与启动都会拒绝范围外的 DSH。
 - **`patch: entry "terminal-controller" not found`** —— Profile 缺少 Web 应用层，按上文用 `web` 模板重建。
 - **检测不到 Agent** —— 在 Host 上执行 `<cli> --version`；确认其目录在启动 DSH 的进程的 `PATH` 中（图形启动器常不同）；用各家工具登录后重启 DSH。
 - **终端** —— macOS/Linux 持久模式需要 `tmux`；启停模块与修改绑定范围需重启；终端按工作区寻址。
 - **局域网** —— 确认卡片转发信息、防火墙放行、两台设备同网络；多个 DSH 实例时手动选择探测到的端口；开启登录保护后需先登录。
 - **中转** —— 检查 Control API 可达性，会话过期则重新登录，刷新设备后绑定 Host。
-- **日志** —— `DSH_CODINGNS_TUNNEL_DEBUG=1 dsh codingns --no-open`（仅元数据）；pnpm 安装日志在 `$DSH_HOME/profiles/<profile>/.plugin-manager/logs/`。
-- **反馈** —— 附上 DSH 与 DSH-CodingNS 版本、操作系统、涉及模块和完整错误：[GitHub Issues](https://github.com/jingyi0605/DSH-CodingNS/issues) 或 QQ **1092985965**。
+- **日志** —— `CODINGNS4DSH_TUNNEL_DEBUG=1 dsh codingns --no-open`（仅元数据）；pnpm 安装日志在 `$DSH_HOME/profiles/<profile>/.plugin-manager/logs/`。
+- **反馈** —— 附上 DSH 与 Codingns4DSH 版本、操作系统、涉及模块和完整错误：[GitHub Issues](https://github.com/jingyi0605/Codingns4DSH/issues) 或 QQ **1092985965**。
 
 ---
 
@@ -268,6 +268,6 @@ pnpm run capability:check   # DSH 能力注册表退休检查
 
 ## 鸣谢
 
-DSH-CodingNS 的项目灵感与部分实现思路来自 **[CodexHost](https://github.com/BytePioneer-AI/codex-host)**——它把 Pi、Claude Code、Grok Build 等 Harness 原生跑在 Codex Desktop 里，展示了 DSH-CodingNS 从另一侧沿用的方向：**把其他 Harness 作为一等 Agent 接入**，而不是替换它们。多 Harness 适配器模型、把 CLI 事件流投影为宿主原生会话、让每个 Agent 的会话留在宿主侧栏与输入框，都源自该项目的设计。感谢其作者与社区。
+Codingns4DSH 的项目灵感与部分实现思路来自 **[CodexHost](https://github.com/BytePioneer-AI/codex-host)**——它把 Pi、Claude Code、Grok Build 等 Harness 原生跑在 Codex Desktop 里，展示了 Codingns4DSH 从另一侧沿用的方向：**把其他 Harness 作为一等 Agent 接入**，而不是替换它们。多 Harness 适配器模型、把 CLI 事件流投影为宿主原生会话、让每个 Agent 的会话留在宿主侧栏与输入框，都源自该项目的设计。感谢其作者与社区。
 
-DSH-CodingNS 是独立项目，与 CodexHost 无隶属关系。
+Codingns4DSH 是独立项目，与 CodexHost 无隶属关系。

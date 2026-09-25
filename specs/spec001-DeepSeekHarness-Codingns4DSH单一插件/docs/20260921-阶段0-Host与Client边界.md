@@ -4,8 +4,8 @@
 
 Host entry 运行在 DSH 的 Node/Cordis 进程，可在后续阶段依赖：
 
-- Node.js API、凭据存储和 CodingNS Control API Client；
-- CodingNS Host 的工作区、终端、任务、进程和端口服务；
+- Node.js API、凭据存储和 Codingns4DSH Control API Client；
+- Codingns4DSH Host 的工作区、终端、任务、进程和端口服务；
 - Node WebRTC 运行时，以及 Host 私钥和信令票据签发相关的 Host-only 能力。
 
 阶段 0 的 Host entry 目前不导入任何 Node API，不访问控制站，不读取账号、密码或 refresh token，不创建服务器、WebRTC、timer、socket 或子进程。

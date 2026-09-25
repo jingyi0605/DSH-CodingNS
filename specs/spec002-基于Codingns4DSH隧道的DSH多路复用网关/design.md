@@ -1,4 +1,4 @@
-# 设计文档 - 基于 CodingNS HTTP/WS 隧道的 DSH 多路复用网关
+# 设计文档 - 基于 Codingns4DSH HTTP/WS 隧道的 DSH 多路复用网关
 
 状态：Draft。
 
@@ -7,15 +7,15 @@
 ```text
 H5 Bootstrap / 官方 DSH Desktop / DSH Client
              │
-             │ dsh-codingns Client Transport
+             │ codingns4dsh Client Transport
              ▼
        WebRTC DataChannel
              │ 直连；失败时 TURN 只转发加密包
              ▼
-CodingNS Tunnel（WebSocket 载体）
+Codingns4DSH Tunnel（WebSocket 载体）
              │
              ▼
-DSH Multiplex Gateway（远程 Host 的 dsh-codingns Host half）
+DSH Multiplex Gateway（远程 Host 的 codingns4dsh Host half）
              ├── Session / Capability / Generation
              ├── RPC / Event / File
              ├── CLI / PTY / Task
@@ -28,7 +28,7 @@ DSH Multiplex Gateway（远程 Host 的 dsh-codingns Host half）
 
 ## 2. 载体与连接
 
-Carrier 只提供可靠有序的二进制消息：打开、收发、关闭和错误。DSH Gateway 把 Carrier 映射到固定入口 `/__dsh__/transport/v1`（实现可使用等价版本化路径），不把 Envelope 当作普通 CodingNS 业务 HTTP。
+Carrier 只提供可靠有序的二进制消息：打开、收发、关闭和错误。DSH Gateway 把 Carrier 映射到固定入口 `/__dsh__/transport/v1`（实现可使用等价版本化路径），不把 Envelope 当作普通 Codingns4DSH 业务 HTTP。
 
 连接顺序：
 
@@ -137,7 +137,7 @@ Remote Host 被列为 PeerHost 逻辑资源，但物理路径按以下顺序选�
 
 ### 10.1 所有权边界
 
-DSH Web 仍是主体。`dsh-codingns` 通过 DSH 公开 Sidebar Slot 提供终端页面，并同时提供浏览器 `webTerminals` 与 Host controller。终端进程由插件自己的 Host half 管理，不依赖 CodingNS 父仓库，不调用 `apps/host/src`，也不把终端能力暴露为浏览器可直连的服务。
+DSH Web 仍是主体。`codingns4dsh` 通过 DSH 公开 Sidebar Slot 提供终端页面，并同时提供浏览器 `webTerminals` 与 Host controller。终端进程由插件自己的 Host half 管理，不依赖 Codingns4DSH 父仓库，不调用 `apps/host/src`，也不把终端能力暴露为浏览器可直连的服务。
 
 ```text
 插件 DSH Sidebar UI + Shadow DOM xterm
@@ -262,7 +262,7 @@ Host 向兼容 controller 返回平台和可用 shell 列表，Client 在插件�
 
 检测结果必须包含规范化 profile ID、显示名、绝对路径、是否可用和不可用原因；创建请求只提交规范化 ID，Host 再解析实际路径。已保存的 profile 当前不可用时，Host 使用“系统推荐”创建终端，并让设置页显示回退原因。不能信任浏览器传入的任意可执行文件路径。
 
-“终端强化”卡片遵守 CodingNS 设置页通用规则：标题栏右侧使用 Switch，未启用时表单保持可见但整体灰显且不可编辑，已保存值不删除。关闭 Switch 时如果存在运行中的持久终端，卡片先显示会话数量并明确说明重启后只会停止 attach、不会结束进程。默认终端使用下拉菜单；颜色使用颜色选择器和“恢复继承”；字号、行高和回滚行数使用带边界的数字输入；光标闪烁使用 Switch，光标形状使用选项菜单。不得提供任意 CSS 文本框。
+“终端强化”卡片遵守 Codingns4DSH 设置页通用规则：标题栏右侧使用 Switch，未启用时表单保持可见但整体灰显且不可编辑，已保存值不删除。关闭 Switch 时如果存在运行中的持久终端，卡片先显示会话数量并明确说明重启后只会停止 attach、不会结束进程。默认终端使用下拉菜单；颜色使用颜色选择器和“恢复继承”；字号、行高和回滚行数使用带边界的数字输入；光标闪烁使用 Switch，光标形状使用选项菜单。不得提供任意 CSS 文本框。
 
 插件直接通过 xterm 公开 options 应用外观，并把 xterm CSS 注入终端自己的 Shadow DOM。禁止修改全局 `body`、覆盖其他终端插件选择器、依赖官方 terminal UI 私有 DOM，或向页面注入无作用域样式。
 

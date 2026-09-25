@@ -4,7 +4,7 @@
 
 ## 目标
 
-在不修改 DeepSeek Harness（DSH）0.1.6-alpha.2 安装内容的前提下，让 CodingNS 插件在原生工作区会话行最左侧显示对应 Agent Logo。
+在不修改 DSH 0.1.6-alpha.2 安装内容的前提下，让 Codingns4DSH 插件在原生工作区会话行最左侧显示对应 Agent Logo。
 
 ## 文档
 

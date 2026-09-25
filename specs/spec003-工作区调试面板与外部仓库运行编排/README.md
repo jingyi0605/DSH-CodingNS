@@ -41,7 +41,7 @@ Spec003 只做三件事：读取 Workspace 级启动配置，按配置启动终�
 - POSIX tmux/local-pty 和 Windows 独立 ConPTY broker
 - 插件内部的受控 HTTP/SSE 反向代理
 
-Spec003 不重新实现 tmux、local-pty 或 ConPTY；反向代理必须在插件内部实现，不调用 CodingNS 父仓库接口或私有源码。父仓库代码只能作为行为参考。
+Spec003 不重新实现 tmux、local-pty 或 ConPTY；反向代理必须在插件内部实现，不调用 Codingns4DSH 父仓库接口或私有源码。父仓库代码只能作为行为参考。
 
 ## 明确不做
 

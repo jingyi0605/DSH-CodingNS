@@ -16,7 +16,7 @@ DSH `dsh-client-connection` 的 Client plugin 会读取 `globalThis.__DSH_TRANSP
 
 同时，`@deepseek-ai/dsh-api-gateway` 的 `ClientRemoteEvents` 会注册唯一的
 `ConnectionGenerationSource`，`ClientRemoteService` 再调用 `connection.start()`。
-因此普通 dsh-codingns Client entry 不能再次注册 source 或启动 connection；否则会触发
+因此普通 codingns4dsh Client entry 不能再次注册 source 或启动 connection；否则会触发
 DSH 的“generation source 已注册”错误。
 
 正式的 generation 装配顺序是：
@@ -24,7 +24,7 @@ DSH 的“generation source 已注册”错误。
 1. pre-Cordis 启动胶水将 Transport hooks 写入 `globalThis.__DSH_TRANSPORT__`。
 2. DSH `dsh-client-connection` plugin 调用 `installConnection()`。
 3. DSH API Gateway 注册唯一 generation source，并调用 `connection.start()`。
-4. CodingNS Transport 仅提供 `rpc/openStream/fetch/loadBundle` 以及 generation/reconnect hooks。
+4. Codingns4DSH Transport 仅提供 `rpc/openStream/fetch/loadBundle` 以及 generation/reconnect hooks。
 5. DSH source 第一次调用 `ready({ home })` 后，DSH 才发布 `connected` 和 generation。
 6. source promise 结束或 signal 被 abort 后，DSH 清理当前 generation 并按自身退避策略重试。
 7. 插件卸载时由 DSH 负责停止官方 connection；插件只关闭自身 Transport。
@@ -52,7 +52,7 @@ type ConnectionGenerationSource =
 适配器位于 `src/bootstrap/dsh-connection-adapter.ts`，负责：
 
 - 将插件内部 `rpc(request)` 映射为 DSH `rpc.call()` 和 `rpc.open()`。
-- 将当前 CodingNS generation 映射为 DSH `ready({ home })`（仅供显式 adapter API 使用）。
+- 将当前 Codingns4DSH generation 映射为 DSH `ready({ home })`（仅供显式 adapter API 使用）。
 - generation 失效时结束 source，由 DSH ConnectionController 负责重试。
 - 在 `onReconnectRequested` 中调用插件 Transport 的 reconnect 回调。
 - `bindDshConnection*` 只用于独立运行时或测试，不由普通 Client entry 自动调用；普通插件不会
@@ -71,7 +71,7 @@ pnpm exec tsc --noEmit
 
 - 当前只完成浏览器侧 DSH hooks 装配和 Fake carrier 验证；正常运行路径由 DSH API Gateway
   独占 generation owner。
-- CodingNS Host acceptor、Relay 四端真实联调尚未完成。
+- Codingns4DSH Host acceptor、Relay 四端真实联调尚未完成。
 - `DshCodingNsTransport` 当前实例的 carrier 不可替换；真实 reconnect 需要后续增加稳定 Transport owner 或 carrier replacement 设计。
 - 内部 Tunnel RPC 暂以 `{ channel, payload }` 保留 DSH 绝对 channel；Host 侧必须确认并固定该线路协议后，才能标记真实 RPC 完成。
 - 不能据此声称文件、终端、进程、PeerHost 或远程连接业务已经可用。

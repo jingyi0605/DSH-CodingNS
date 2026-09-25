@@ -7,7 +7,7 @@
 1. 控制站和 Relay 只能看到控制面元数据：账号、设备、Host binding、ticket、SDP/ICE、在线状态和流量统计。
 2. RPC、模型消息、CLI 输出、PTY、任务、文件、端口、PeerHost 和远程 Web 内容必须在 DSH Client 与 DSH Host 之间端到端加密。
 3. Gateway 不得把业务消息交给 Relay，也不得让控制站终止业务 HTTP/WebSocket。
-4. `CodingNS TunnelFrame`、`DSH Envelope`、DSH 应用协议族和 DSH 运行时版本必须分别协商，不能混用版本字段。
+4. `Codingns4DSH TunnelFrame`、`DSH Envelope`、DSH 应用协议族和 DSH 运行时版本必须分别协商，不能混用版本字段。
 
 ## 需求
 
@@ -29,7 +29,7 @@
 
 ### 需求 5：DSH 和业务频道
 
-支持 DSH RPC、Remote、事件和文件；CodingNS CLI 适配器；tmux/PTY/后台任务；进程/端口/反向代理；PeerHost；以及远程 DSH Web Runtime 所需的 `web.*` 和 `plugin.*` 消息。
+支持 DSH RPC、Remote、事件和文件；Codingns4DSH CLI 适配器；tmux/PTY/后台任务；进程/端口/反向代理；PeerHost；以及远程 DSH Web Runtime 所需的 `web.*` 和 `plugin.*` 消息。
 
 ### 需求 6：HostScope 路由
 
@@ -49,9 +49,9 @@ Remote Host 可作为 PeerHost 逻辑资源。优先建立 Client 到目标 Host
 
 ### 需求 10：DSH Sidebar 终端 UI 与插件自有持久运行时
 
-DSH Web 是终端功能的唯一主体界面。`dsh-codingns` 必须通过 DSH 公开 Slot 提供自己的 Sidebar 终端 UI，并实现与 DSH `webTerminals` 服务契约兼容的 controller；浏览器只调用 DSH Remote，不得直连本机终端 broker，也不得获得任何本机控制凭据。
+DSH Web 是终端功能的唯一主体界面。`codingns4dsh` 必须通过 DSH 公开 Slot 提供自己的 Sidebar 终端 UI，并实现与 DSH `webTerminals` 服务契约兼容的 controller；浏览器只调用 DSH Remote，不得直连本机终端 broker，也不得获得任何本机控制凭据。
 
-插件必须独立实现终端运行时，不能导入、启动或调用 CodingNS 父仓库及其 Host 私有接口。持久映射以 `hostId + workspaceId + plugin terminalId` 唯一定位，并记录 `runtimeSessionKey + runtimeType`；DSH `sessionId` 只用于当前请求的 attach、权限和工作区解析，不得成为终端所有者。持久运行时记录与当前 generation 的临时 attach 分开保存。裸 `sessionId` 或裸 `terminalId` 不能作为跨 Host 的全局标识。
+插件必须独立实现终端运行时，不能导入、启动或调用 Codingns4DSH 父仓库及其 Host 私有接口。持久映射以 `hostId + workspaceId + plugin terminalId` 唯一定位，并记录 `runtimeSessionKey + runtimeType`；DSH `sessionId` 只用于当前请求的 attach、权限和工作区解析，不得成为终端所有者。持久运行时记录与当前 generation 的临时 attach 分开保存。裸 `sessionId` 或裸 `terminalId` 不能作为跨 Host 的全局标识。
 
 平台行为固定如下：
 
@@ -61,7 +61,7 @@ DSH Web 是终端功能的唯一主体界面。`dsh-codingns` 必须通过 DSH �
 4. 浏览器、插件或 DSH 断开时只释放订阅和 attach。只有用户明确关闭终端时才结束对应 tmux session 或 ConPTY/shell 进程；关闭操作必须可重复执行。
 5. DSH 或插件重启后必须检查持久运行时是否仍然存在并重新 attach，不能只凭数据库记录宣称终端仍在运行，也不能在原运行时丢失后悄悄用同一 ID 创建新进程。
 6. 官方 `terminal-controller` 与官方 terminal UI 必须成对启用或成对禁用。插件接管时必须在同一 Bundle generation 内一次性提供严格 Typert manifest、Host controller、浏览器 `webTerminals` 和 Sidebar UI，不能让 Web 启动进入等待服务的半替换状态，也不能注册重复的 `terminal` namespace。
-7. DSH「设置 → CodingNS」必须增加名为“终端强化”的独立模块卡片。标题栏 Switch 保存启用意图，但启用和禁用都只在重启 DSH 后生效；设置页必须同时显示当前运行状态和待重启状态，不能让用户误以为已经即时切换 controller。禁用时若仍有持久终端运行，必须显示数量和“不结束这些会话”的明确提示。
+7. DSH「设置 → Codingns4DSH」必须增加名为“终端强化”的独立模块卡片。标题栏 Switch 保存启用意图，但启用和禁用都只在重启 DSH 后生效；设置页必须同时显示当前运行状态和待重启状态，不能让用户误以为已经即时切换 controller。禁用时若仍有持久终端运行，必须显示数量和“不结束这些会话”的明确提示。
 8. “终端强化”必须允许设置新建终端的默认 profile。默认值为“系统推荐”：macOS 选择 zsh；Linux 选择 zsh，未安装时回退 bash；Windows 优先可用的 PowerShell，否则回退 cmd。用户也可以从当前平台已检测到的 shell 中指定默认项；已保存项变为不可用时回退“系统推荐”并显示原因。
 9. “终端强化”必须允许设置终端外观，至少包括主题继承或自定义、背景色、前景色、光标颜色、字体、字号、行高、光标形状、光标闪烁和回滚行数。默认继承 DSH 设计令牌；不得接受任意 CSS、背景图片或远程 URL。xterm 样式必须封装在插件终端的 Shadow DOM 中，不能污染全局页面或其他插件。
 
