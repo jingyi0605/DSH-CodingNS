@@ -21,6 +21,8 @@ test('表单控件使用 DSH 真实主题令牌', () => {
 })
 
 test('弹窗表面同时设置 DSH 背景、前景和阴影', () => {
+  assert.match(String(dshPopupSurfaceStyle.background), /--dsw-alias-bg-layer-3/u)
+  assert.match(String(dshPopupSurfaceStyle.background), /--dsw-alias-bg-l1/u)
   assert.match(String(dshPopupSurfaceStyle.background), /--dsw-specific-menu/u)
   assert.match(String(dshPopupSurfaceStyle.color), /--dsw-alias-label-primary/u)
   assert.match(String(dshPopupSurfaceStyle.boxShadow), /--dsw-elevation-prominent/u)

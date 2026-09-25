@@ -204,6 +204,7 @@ export const dshSettingsNoteStyle: CSSProperties = {
 /** 模态框和弹出菜单必须成对设置前景色与背景色。 */
 export const dshPopupSurfaceStyle: CSSProperties = {
   color: dshThemeColor.labelPrimary,
-  background: dshThemeColor.menuBackground,
+  // 0.1.7 的 specific-menu 可能带透明度；layer-3 在 0.1.5 至 0.1.7 中均为弹层实底。
+  background: 'var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-l1, var(--dsw-specific-menu, #2f3033)))',
   boxShadow: dshThemeColor.prominentShadow,
 }
