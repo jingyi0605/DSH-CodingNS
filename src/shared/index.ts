@@ -233,3 +233,9 @@ export type {
   RelaySignalingTicketResponse,
 } from './contracts/signaling.js'
 export type { DshHostStatus } from './contracts/host-status.js'
+export {
+  CODINGNS4DSH_DEBUG_ENV,
+  debugInfo,
+  debugWarn,
+  resolveCodingNsDebugEnabled,
+} from './debug.js'

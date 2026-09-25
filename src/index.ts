@@ -57,6 +57,12 @@ export { createHttpDshH5ControlApi, startDshH5BrowserBootstrap } from './client/
 export type { DshH5BrowserBootstrapOptions, DshH5BrowserBootstrapResult, DshH5BrowserControlApi } from './client/dsh-h5-bootstrap.js'
 export { CODINGNS_RPC_CHANNEL } from './shared/contracts/transport.js'
 export {
+  CODINGNS4DSH_DEBUG_ENV,
+  debugInfo,
+  debugWarn,
+  resolveCodingNsDebugEnabled,
+} from './shared/debug.js'
+export {
   CODINGNS_CONTROL_BASE_URL_FIELD,
   CODINGNS_CONTROL_BASE_URLS_FIELD,
   CODINGNS_LAN_ACCESS_DSH_FIELD,
