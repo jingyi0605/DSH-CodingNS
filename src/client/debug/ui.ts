@@ -91,10 +91,12 @@ function DebugBody({ sessionId, rpc, remote, sidebarRight }: DebugTabProps): Rea
   const [message, setMessage] = useState('正在读取工作区…')
   const [busy, setBusy] = useState(false)
 
-  const load = async (currentWorkspaceId: string): Promise<void> => {
+  const load = async (currentWorkspaceId: string, isCurrent?: () => boolean): Promise<void> => {
     const scope = { sessionId: String(sessionId), workspaceId: currentWorkspaceId, generation: 0 }
     const next = await call<DebugConfig>(rpc, 'debug/config/get', scope)
     const running = await call<readonly DebugInstance[]>(rpc, 'debug/runtime/list', scope)
+    // Session 切换后，旧请求的结果不能覆盖新 Session 的面板状态。
+    if (isCurrent?.() === false) return
     setConfig(next)
     setInstances(running)
     setMessage('')
@@ -114,7 +116,7 @@ function DebugBody({ sessionId, rpc, remote, sidebarRight }: DebugTabProps): Rea
         if (id === null) throw new Error('当前 Session 没有关联 Workspace')
         if (disposed) return
         setWorkspaceId(id)
-        await load(id)
+        await load(id, () => !disposed)
       } catch (error) {
         if (!disposed) setMessage(error instanceof Error ? error.message : String(error))
       }
