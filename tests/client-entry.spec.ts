@@ -8,6 +8,7 @@ const clientBundle = join(dirname(fileURLToPath(import.meta.url)), '../data/buil
 const clientSource = join(dirname(fileURLToPath(import.meta.url)), '../src/client/index.ts')
 const remoteWebContextSource = join(dirname(fileURLToPath(import.meta.url)), '../src/client/remote-web-context.ts')
 const hostSource = join(dirname(fileURLToPath(import.meta.url)), '../src/host/index.ts')
+const runtimeVersionSource = join(dirname(fileURLToPath(import.meta.url)), '../src/client/dsh-runtime-version.ts')
 
 test('Client 入口以 DSH Loader factory 格式构建', async () => {
   const source = await readFile(clientBundle, 'utf8')
@@ -116,6 +117,13 @@ test('Client 入口兼容 DSH 0.1.7 ConfigForm，不把旧 settingsScope 作为�
   assert.match(source, /ctx\.get\('configForms'\)/u)
   assert.match(source, /ctx\.get\('settingsScope'\)/u)
   assert.match(source, /createConfigFormSettingsStore/u)
+})
+
+test('Client 版本门禁可用 ConfigForms 标识现代 DSH', async () => {
+  const source = await readFile(runtimeVersionSource, 'utf8')
+  assert.match(source, /hasModernConfigForms\(ctx\)/u)
+  assert.match(source, /ctx\.get\('configForms'\)/u)
+  assert.match(source, /0\.1\.7-rc\.2/u)
 })
 
 test('Client 构建产物提供自有 webTerminals 与 Sidebar 终端', async () => {

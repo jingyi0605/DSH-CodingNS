@@ -80,7 +80,7 @@ export const inject = ['slots', 'connection', 'remote', 'remote.workspace', 'rem
  */
 export function apply(ctx?: Context): void {
   if (ctx === undefined) return
-  const dshVersion = assertInjectedDshVersion()
+  const dshVersion = assertInjectedDshVersion(ctx)
   // 版本门禁通过后才修改浏览器全局，避免不兼容 Client 留下半初始化状态。
   ensureCryptoRandomUUID()
   ctx.effect(() => registerCodingNsLocale(ctx), 'dsh-codingns: Client 词典')
