@@ -25,27 +25,34 @@ export function createConfigSettingsStore(
   const unsubscribeHost = settings.on?.('settings/document-updated', (updatedNamespace) => {
     if (updatedNamespace === namespace) notify()
   })
-  const snapshot = (): { value: CodingNsSettings | undefined; revision: number | undefined; writable: boolean; status: 'loading' | 'ready' | 'unavailable' } => {
+  const readSnapshot = (): { value: CodingNsSettings | undefined; revision: number | undefined; writable: boolean; status: 'loading' | 'ready' | 'unavailable' } => {
     const descriptor = settings.describe({ redactSecrets: true }).find((item) => item.ns === namespace)
     if (descriptor === undefined) return { value: undefined, revision: undefined, writable: false, status: 'unavailable' }
     return { value: descriptor.value as CodingNsSettings, revision: descriptor.revision, writable: descriptor.writable !== false, status: 'ready' }
   }
+  let current = readSnapshot()
+  const refresh = (): void => {
+    const next = readSnapshot()
+    if (current.value === next.value && current.revision === next.revision && current.writable === next.writable && current.status === next.status) return
+    current = next
+    notify()
+  }
   return {
-    getSnapshot: snapshot,
+    getSnapshot: () => current,
     subscribe: (listener) => { listeners.add(listener); return () => listeners.delete(listener) },
     mutate: async (operations, expectedRevision) => {
       await settings.mutate(namespace, operations, expectedRevision)
-      notify()
+      refresh()
       return true
     },
     set: async (field, value) => {
       await settings.mutate(namespace, [{ op: 'set', path: [field], value }])
-      notify()
+      refresh()
       return true
     },
     unset: async (field) => {
       await settings.mutate(namespace, [{ op: 'unset', path: [field] }])
-      notify()
+      refresh()
       return true
     },
     dispose: () => { unsubscribeHost?.(); listeners.clear() },
