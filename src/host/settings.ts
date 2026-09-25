@@ -7,6 +7,7 @@ import {
   type CodingNsConfig,
   type CodingNsSettings,
 } from '../shared/contracts/config.js'
+import { debugInfo } from '../shared/debug.js'
 
 /**
  * DSH 设置服务使用的 Codingns4DSH namespace schema。
@@ -102,12 +103,12 @@ export function registerCodingNsSettings(ctx: Context): SettingsScope<CodingNsSe
     ) => SettingsScope<CodingNsSettings>
   }).register
   if (typeof legacyRegister === 'function') {
-    console.info('codingns4dsh: host settings source=legacy-settings')
+    debugInfo('codingns4dsh: host settings source=legacy-settings')
     return legacyRegister.call(settings, CODINGNS_SETTINGS_NAMESPACE, CodingNsSettingsSchema, {
       applies: 'live',
     })
   }
-  console.info('codingns4dsh: host settings source=config-forms')
+  debugInfo('codingns4dsh: host settings source=config-forms')
   return createConfigSettingsScope(ctx, settings)
 }
 
@@ -170,7 +171,7 @@ function findConfigSettingsDescriptor(settings: Pick<SettingsProvider, 'describe
   })))
   if (signature !== lastConfigDescriptorSignature) {
     lastConfigDescriptorSignature = signature
-    console.info('codingns4dsh: host ConfigForms descriptors', JSON.parse(signature) as unknown)
+    debugInfo('codingns4dsh: host ConfigForms descriptors', JSON.parse(signature) as unknown)
   }
   return descriptors.find((item) => isCodingNsSettingsNamespace(item.ns))
 }

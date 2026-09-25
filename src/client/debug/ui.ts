@@ -4,6 +4,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { CodingNsRpcClient, CodingNsRpcResult } from '../features/types.js'
 import { CODINGNS_RPC_CHANNEL } from '../../shared/contracts/transport.js'
+import { debugWarn } from '../../shared/debug.js'
 import { dshButtonStyle, dshFieldStyle, dshFormRootStyle, dshThemeColor } from '../theme.js'
 
 export const DEBUG_KIND = 'debug'
@@ -67,7 +68,7 @@ export function registerDebugUi(ctx: Context, rpc: CodingNsRpcClient, remote: un
   } catch (error) {
     for (const dispose of disposers.reverse()) dispose()
     if (isDuplicateDebugRegistration(error)) {
-      console.warn(`codingns4dsh: 调试 Sidebar 已注册，跳过重复注册: ${DEBUG_PROVIDER_ID}`)
+      debugWarn(`codingns4dsh: 调试 Sidebar 已注册，跳过重复注册: ${DEBUG_PROVIDER_ID}`)
       return () => {}
     }
     throw error

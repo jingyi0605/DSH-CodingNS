@@ -18,31 +18,39 @@ import { installTerminalController } from './terminal/startup.js'
 import { DebugWorkspaceService } from './debug.js'
 import { detectRuntimeDshVersion, DSH_VERSION_INJECTION_NAME } from './dsh-runtime-version.js'
 import { createDshCapabilityRegistry } from '../dsh-capabilities/index.js'
+import { debugInfo } from '../shared/debug.js'
 
 export function apply(ctx?: Context): void {
   if (ctx === undefined) return
   const dshVersion = detectRuntimeDshVersion()
-  console.error('codingns4dsh: host apply entered')
+  debugInfo('codingns4dsh: host apply entered', { dshVersion })
 
   ctx.inject(['settings', 'connection', 'webServer'], async (hostCtx) => {
-    console.error('codingns4dsh: host inject ready', {
+    debugInfo('codingns4dsh: host inject ready', {
       hasConnection: hostCtx.connection !== undefined,
+      hasSettings: hostCtx.settings !== undefined,
+      hasWebServer: (hostCtx as Context & { webServer?: unknown }).webServer !== undefined,
     })
     const webServerPort = (hostCtx as Context & { webServer: { port: number } }).webServer.port
     // LAN 入口和中继 Web 页面可能使用非 loopback URL，但它们都已经经过
     // DSH Host 的认证边界并回到本机 Host。通过启动页注入 transport 所有权，
     // 让 DSH 原生 ui-settings 保持 host 模式，而不是错误降级为 memory 模式。
     const indexInjectionEvents = hostCtx as unknown as { on(name: string, listener: (table: unknown[]) => void): unknown }
+    debugInfo('codingns4dsh: host index injection registration begin')
     indexInjectionEvents.on('webserver/index-inject', (table) => {
       table.push({ kind: 'global', name: '__DSH_TRANSPORT__', value: { ownsHost: true } })
       table.push({ kind: 'global', name: DSH_VERSION_INJECTION_NAME, value: dshVersion })
     })
+    debugInfo('codingns4dsh: host index injection registration ready')
+    debugInfo('codingns4dsh: host settings registration begin')
     const settings = registerCodingNsSettings(hostCtx)
+    debugInfo('codingns4dsh: host settings registered')
     // controller 必须在功能模块和浏览器 Client 开始消费状态前完成装配。
     // 工厂在本次启动只读取一次开关，设置 watcher 不会热切同名 service。
     const terminal = await installTerminalController(hostCtx, settings, hostCtx.settings, {
       resolveWorkspaceRoot: (workspaceId) => resolveWorkspaceRoot(hostCtx, workspaceId),
     })
+    debugInfo('codingns4dsh: host terminal controller ready', { mode: terminal.mode })
     const services: CodingNsHostServices = {
       rpc: new CodingNsRpcTable(),
       dshVersion,
@@ -67,6 +75,11 @@ export function apply(ctx?: Context): void {
     })
     const servicesWithDebug: CodingNsHostServices = { ...services, debug }
     const capabilityProfile = createDshCapabilityRegistry(dshVersion, 'host', hostCtx).getProfile(hostCtx)
+    debugInfo('codingns4dsh: host capabilities resolved', {
+      dshVersion,
+      capabilities: [...capabilityProfile.capabilities.entries()].map(([capability, resolution]) => ({ capability, status: resolution.status, route: resolution.routeId, reason: resolution.reason ?? null })),
+      diagnostics: capabilityProfile.diagnostics,
+    })
     const registry = new FeatureRegistry<CodingNsHostServices>(servicesWithDebug, capabilityProfile)
     registry.registerMany(createHostFeatures({
       terminalStatus: {
@@ -75,11 +88,12 @@ export function apply(ctx?: Context): void {
       },
     }))
     registry.validate()
+    debugInfo('codingns4dsh: host feature registry ready', { features: registry.descriptors().map((item) => item.name) })
     const restartStates = captureRestartFeatureStates(registry.descriptors(), settings.get(), dshVersion)
 
     try {
       registerCodingNsRpc(hostCtx, services.rpc, services.settingsProvider)
-      console.error('codingns4dsh: host RPC registration requested')
+      debugInfo('codingns4dsh: host RPC registration requested')
     } catch (error) {
       console.error('codingns4dsh: host RPC registration failed', error)
       throw error
@@ -87,8 +101,10 @@ export function apply(ctx?: Context): void {
 
     hostCtx.effect(() => {
       const sync = (): void => {
+        const enabled = enabledFeatureNames(registry.descriptors(), settings.get(), restartStates, dshVersion)
+        debugInfo('codingns4dsh: host feature sync', { enabled, states: registry.list() })
         void registry
-          .reconcile(enabledFeatureNames(registry.descriptors(), settings.get(), restartStates, dshVersion))
+          .reconcile(enabled)
           .catch((error: unknown) => {
             console.error('codingns4dsh: 功能模块状态同步失败', error)
           })

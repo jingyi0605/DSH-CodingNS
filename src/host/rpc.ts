@@ -3,6 +3,7 @@ import type { ConnectionRpcHandler, ConnectionRpcResult } from '@deepseek-ai/dsh
 import type { SettingsPathOp, SettingsProvider } from '@deepseek-ai/dsh-settings'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { CODINGNS_SETTINGS_NAMESPACE, type CodingNsSettings } from '../shared/contracts/config.js'
+import { debugInfo, debugWarn } from '../shared/debug.js'
 import { CodingNsRpcError, type CodingNsRpcHandler, type CodingNsRpcTable } from './rpc-table.js'
 
 /**
@@ -15,15 +16,15 @@ import { CodingNsRpcError, type CodingNsRpcHandler, type CodingNsRpcTable } from
  */
 export function createCodingNsRpcHandler(table: CodingNsRpcTable): ConnectionRpcHandler {
   return async (endpoint, payload, signal) => {
-    console.info('codingns4dsh: host rpc request', { endpoint })
+    debugInfo('codingns4dsh: host rpc request', { endpoint })
     const target = table.resolve(endpoint)
     if (target === null) {
-      console.warn('codingns4dsh: host rpc endpoint not found', { endpoint })
+      debugWarn('codingns4dsh: host rpc endpoint not found', { endpoint })
       return failure('CODINGNS_RPC_NOT_FOUND', `未知 Codingns4DSH RPC: ${endpoint}`)
     }
     try {
       const value = await target.handler(target.action, payload, { signal })
-      console.info('codingns4dsh: host rpc success', { endpoint })
+      debugInfo('codingns4dsh: host rpc success', { endpoint })
       return success(value)
     } catch (error) {
       console.error('codingns4dsh: host rpc handler failed', { endpoint, error })
@@ -39,7 +40,7 @@ export function registerCodingNsRpc(ctx: Context, table: CodingNsRpcTable, setti
   // 注入的服务实例，挂载同协议的前缀路由，避免把 RPC 请求落到 SPA fallback。
   const webServer = (ctx as Context & { webServer: WebServerLike }).webServer
   const connection = ctx.connection
-  console.info('codingns4dsh: host rpc registration begin', {
+  debugInfo('codingns4dsh: host rpc registration begin', {
     hasConnectionRpc: typeof (connection as typeof connection & { rpc?: { handle?: unknown } }).rpc?.handle === 'function',
     endpointCount: CODINGNS_RPC_ENDPOINTS.length,
   })
@@ -57,7 +58,7 @@ export function registerCodingNsRpc(ctx: Context, table: CodingNsRpcTable, setti
         path: '/codingns',
         handler: (request: IncomingMessage, response: ServerResponse) => handleChannelRequest(request, response, connection, handler),
       })
-      console.info('codingns4dsh: host rpc channel registered', {
+      debugInfo('codingns4dsh: host rpc channel registered', {
         transport: 'webServer.prefix',
         channel: '/codingns',
       })
@@ -69,7 +70,7 @@ export function registerCodingNsRpc(ctx: Context, table: CodingNsRpcTable, setti
         requestBody: 'buffered',
         fetch: async (request) => handleFetchRpc(request, endpoint, handler),
       }))
-      console.info('codingns4dsh: host rpc fetch routes registered', {
+      debugInfo('codingns4dsh: host rpc fetch routes registered', {
         prefix: '/api/codingns/',
         count: disposeFetch.length,
         endpoints: CODINGNS_RPC_ENDPOINTS,
@@ -78,7 +79,7 @@ export function registerCodingNsRpc(ctx: Context, table: CodingNsRpcTable, setti
         for (const dispose of disposeFetch.reverse()) await dispose()
         await unregisterChannel()
         unregisterSettings?.()
-        console.info('codingns4dsh: host rpc channel disposed')
+        debugInfo('codingns4dsh: host rpc channel disposed')
       }
     },
     'codingns4dsh: Host RPC',
@@ -265,7 +266,7 @@ async function handleFetchRpc(
   endpoint: string,
   handler: ConnectionRpcHandler,
 ): Promise<Response> {
-  console.info('codingns4dsh: host fetch rpc request', {
+  debugInfo('codingns4dsh: host fetch rpc request', {
     endpoint,
     method: request.method,
     path: new URL(request.url).pathname,
@@ -283,7 +284,7 @@ async function handleFetchRpc(
     return new Response('invalid RPC envelope', { status: 400 })
   }
   const result = await handler(endpoint, envelope.payload, request.signal)
-  console.info('codingns4dsh: host fetch rpc response', { endpoint, ok: result.ok })
+  debugInfo('codingns4dsh: host fetch rpc response', { endpoint, ok: result.ok })
   return Response.json({ type: 'server-response', rpcId: envelope.rpcId, result })
 }
 

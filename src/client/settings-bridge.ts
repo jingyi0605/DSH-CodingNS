@@ -1,6 +1,7 @@
 import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { CODINGNS_RPC_CHANNEL } from '../shared/contracts/transport.js'
 import type { CodingNsSettings } from '../shared/contracts/config.js'
+import { debugInfo, debugWarn } from '../shared/debug.js'
 import type { CodingNsRpcClient } from './features/types.js'
 import type { CodingNsSettingsSnapshot, CodingNsSettingsStore } from '../dsh-capabilities/settings-store.js'
 
@@ -49,6 +50,7 @@ export class CodingNsSettingsBridge implements CodingNsSettingsStore<CodingNsSet
     if (!this.isRemote()) return
     if (this.remoteLoaded) return
     if (this.remoteLoad !== undefined) return this.remoteLoad
+    debugInfo('codingns4dsh: client settings load begin')
     this.remoteLoad = this.call<RemoteSettingsResponse>('settings/get', {}).then((response) => {
       this.remoteLoaded = true
       this.publish({
@@ -57,6 +59,7 @@ export class CodingNsSettingsBridge implements CodingNsSettingsStore<CodingNsSet
         revision: response.revision,
         writable: true,
       })
+      debugInfo('codingns4dsh: client settings load success', { revision: response.revision })
     }).finally(() => {
       this.remoteLoad = undefined
     })
@@ -102,15 +105,26 @@ export class CodingNsSettingsBridge implements CodingNsSettingsStore<CodingNsSet
   private async call<T>(endpoint: string, payload: unknown): Promise<T> {
     let result
     try {
+      debugInfo('codingns4dsh: client rpc request', { channel: CODINGNS_RPC_CHANNEL, endpoint })
       result = await this.rpc.call(CODINGNS_RPC_CHANNEL, endpoint, payload)
     } catch (error) {
       // DSH 原生连接通常把自定义 RPC 映射到 /api；保留逻辑通道兼容
       // Codingns4DSH Transport，同时在普通 Web Host 上回退到实际 Fetch 路由。
       const message = error instanceof Error ? error.message : String(error)
       if (!/HTTP (?:404|405)\b/u.test(message)) throw error
-      result = await this.rpc.call('/api', `codingns/${endpoint}`, payload)
+      debugWarn('codingns4dsh: client rpc fallback', { endpoint, error: message })
+      try {
+        result = await this.rpc.call('/api', `codingns/${endpoint}`, payload)
+      } catch (fallbackError) {
+        console.error('codingns4dsh: client rpc fallback failed', { endpoint, error: fallbackError })
+        throw fallbackError
+      }
     }
-    if (!result.ok) throw new Error(result.error.message)
+    if (!result.ok) {
+      console.error('codingns4dsh: client rpc response error', { endpoint, error: result.error })
+      throw new Error(result.error.message)
+    }
+    debugInfo('codingns4dsh: client rpc response success', { endpoint })
     return result.value as T
   }
 

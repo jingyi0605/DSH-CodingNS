@@ -7,6 +7,7 @@ import type {
   FeatureState,
 } from '../shared/contracts/feature.js'
 import type { DshCapabilityDiagnostic, DshCapabilityProfile } from '../dsh-capabilities/types.js'
+import { debugInfo } from '../shared/debug.js'
 
 export type FeatureRegistryErrorCode =
   | 'FEATURE_INVALID_DESCRIPTOR'
@@ -431,7 +432,7 @@ export class FeatureRegistry<S = unknown, M extends FeatureModule<S> = FeatureMo
 }
 
 function traceFeature(event: string, details: Record<string, unknown>): void {
-  console.info(`codingns4dsh: feature.${event}`, details)
+  debugInfo(`codingns4dsh: feature.${event}`, details)
 }
 
 function serializeError(error: unknown): { name: string; message: string; stack?: string } {

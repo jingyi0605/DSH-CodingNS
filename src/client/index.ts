@@ -28,6 +28,7 @@ import type { CodingNsClientFeatureModule, CodingNsClientServices, CodingNsRpcCl
 import { ensureCryptoRandomUUID } from './lan-access.js'
 import { CodingNsSettingsSection } from './settings-section.js'
 import { createCodingNsSettingsBridge } from './settings-bridge.js'
+import { debugInfo } from '../shared/debug.js'
 import { createConfigFormSettingsStore, type DshClientConfigForms, type DshConfigForm } from '../dsh-capabilities/client/config-forms-adapter.js'
 import type { CodingNsSettingsStore } from '../dsh-capabilities/settings-store.js'
 import { CodingNsWebTerminals, registerCodingNsTerminalUi } from './terminal/index.js'
@@ -81,21 +82,35 @@ export const inject = ['slots', 'connection', 'remote', 'remote.workspace', 'rem
 export function apply(ctx?: Context): void {
   if (ctx === undefined) return
   const dshVersion = assertInjectedDshVersion(ctx)
+  debugInfo('codingns4dsh: client apply entered', { dshVersion })
   // 版本门禁通过后才修改浏览器全局，避免不兼容 Client 留下半初始化状态。
   ensureCryptoRandomUUID()
   ctx.effect(() => registerCodingNsLocale(ctx), 'codingns4dsh: Client 词典')
 
   ctx.inject(['slots', 'connection', 'remote', 'remote.workspace', 'remote.session', 'remote.terminal', 'sidebarRight', 'sidebarRightTabs', 'theme', 'locale', 'uiConversation'], (settingsCtx) => {
+    debugInfo('codingns4dsh: client inject ready', {
+      hasConnection: settingsCtx.connection !== undefined,
+      hasRemote: settingsCtx.remote !== undefined,
+      hasSlots: settingsCtx.slots !== undefined,
+      hasSidebarRight: settingsCtx.sidebarRight !== undefined,
+      hasSidebarRightTabs: settingsCtx.sidebarRightTabs !== undefined,
+      hasTheme: settingsCtx.theme !== undefined,
+      hasLocale: settingsCtx.locale !== undefined,
+      hasUiConversation: settingsCtx.uiConversation !== undefined,
+    })
     // Host 与 Client 共用同一个 cordis Context 类型，而 DSH 的 Host 侧声明会把
     // connection 收窄成 Host 句柄；浏览器侧按 ConnectionHandle 收窄回真实形状。
     const connection = settingsCtx.connection as unknown as ConnectionHandle
     const settings = createClientSettingsStore(settingsCtx, connection.rpc)
+    debugInfo('codingns4dsh: client settings store ready')
     // Typert manifest 可能晚于立即加载的 Client 入口完成登记，必须在每次调用时取 Remote。
     // DSH 0.1.7 的 ClientRemote 声明可能尚未包含插件按需挂载的 terminal 命名空间。
     // 运行时仍由 Typert manifest 提供该字段，因此在边界处按可选动态服务读取。
     const terminalRemote = (): TerminalRemote | undefined => (settingsCtx.remote as unknown as { readonly terminal?: TerminalRemote }).terminal
     const webTerminals = new CodingNsWebTerminals(settingsCtx, terminalRemote)
+    debugInfo('codingns4dsh: client terminal UI registration begin')
     const disposeTerminalUi = registerCodingNsTerminalUi(settingsCtx, webTerminals, settings)
+    debugInfo('codingns4dsh: client terminal UI registration ready')
     const services: CodingNsClientServices = {
       dshVersion,
       settings,
@@ -106,11 +121,19 @@ export function apply(ctx?: Context): void {
       uiConversation: settingsCtx.uiConversation,
       uiContext: settingsCtx,
     }
+    debugInfo('codingns4dsh: client account bar registration begin')
     const disposeAccountBar = startCodingNsAccountBar(connection.rpc, undefined, settings)
+    debugInfo('codingns4dsh: client account bar registration ready')
     const capabilityProfile = createDshCapabilityRegistry(dshVersion, 'client', settingsCtx).getProfile(settingsCtx)
+    debugInfo('codingns4dsh: client capabilities resolved', {
+      dshVersion,
+      capabilities: [...capabilityProfile.capabilities.entries()].map(([capability, resolution]) => ({ capability, status: resolution.status, route: resolution.routeId, reason: resolution.reason ?? null })),
+      diagnostics: capabilityProfile.diagnostics,
+    })
     const registry = new FeatureRegistry<CodingNsClientServices, CodingNsClientFeatureModule>(services, capabilityProfile)
     registry.registerMany(CLIENT_FEATURES)
     registry.validate()
+    debugInfo('codingns4dsh: client feature registry ready', { features: registry.descriptors().map((item) => item.name) })
     const restartStates: Record<string, boolean> = {}
     let restartStatesCaptured = false
 
@@ -121,8 +144,15 @@ export function apply(ctx?: Context): void {
           Object.assign(restartStates, captureRestartFeatureStates(registry.descriptors(), snapshot.value, dshVersion))
           restartStatesCaptured = true
         }
+        const enabled = enabledFeatureNames(registry.descriptors(), snapshot.value, restartStates, dshVersion)
+        debugInfo('codingns4dsh: client feature sync', {
+          settingsStatus: snapshot.status,
+          settingsRevision: snapshot.revision,
+          enabled,
+          states: registry.list(),
+        })
         void registry
-          .reconcile(enabledFeatureNames(registry.descriptors(), snapshot.value, restartStates, dshVersion))
+          .reconcile(enabled)
           .catch((error: unknown) => {
             console.error('codingns4dsh: 功能模块状态同步失败', error)
           })
@@ -144,13 +174,23 @@ export function apply(ctx?: Context): void {
       }
     }, 'codingns4dsh: 功能模块启停同步')
 
-    settingsCtx.slots.inject('settings.section', () => settingsCtx.slots.register({
-      name: 'settings.section',
-      id: 'codingns',
-      order: 30,
-      label: 'Codingns4DSH',
-      inject: () => ({ settings, registry, services, restartStates }),
-    }, CodingNsSettingsSection))
+    try {
+      debugInfo('codingns4dsh: client settings slot registration begin')
+      settingsCtx.slots.inject('settings.section', () => {
+        debugInfo('codingns4dsh: client settings slot injector invoked')
+        return settingsCtx.slots.register({
+          name: 'settings.section',
+          id: 'codingns',
+          order: 30,
+          label: 'Codingns4DSH',
+          inject: () => ({ settings, registry, services, restartStates }),
+        }, CodingNsSettingsSection)
+      })
+      debugInfo('codingns4dsh: client settings slot registration requested')
+    } catch (error) {
+      console.error('codingns4dsh: client settings slot registration failed', error)
+      throw error
+    }
   })
 }
 
@@ -158,12 +198,14 @@ export function apply(ctx?: Context): void {
 function createClientSettingsStore(ctx: Context, rpc: CodingNsRpcClient): CodingNsSettingsStore<CodingNsSettings> {
   const scopeBinder = ctx.get('settingsScope') as { bind?: (spec: { readonly namespace: string }) => Parameters<typeof createCodingNsSettingsBridge>[0] } | undefined
   if (typeof scopeBinder?.bind === 'function') {
+    debugInfo('codingns4dsh: client settings source=settingsScope')
     const local = scopeBinder.bind({ namespace: CODINGNS_SETTINGS_NAMESPACE })
     return createCodingNsSettingsBridge(local, rpc)
   }
 
   const forms = ctx.get('configForms') as DshClientConfigForms | undefined
   const form = findConfigForm(forms)
+  debugInfo('codingns4dsh: client settings source=configForms', { hasConfigForms: forms !== undefined, hasForm: form !== undefined })
   return createConfigFormSettingsStore({ get: <T>() => form as DshConfigForm<T> | undefined }, CODINGNS_SETTINGS_NAMESPACE)
 }
 
