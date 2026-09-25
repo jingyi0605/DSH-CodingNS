@@ -5,6 +5,7 @@ import { CODINGNS_RPC_CHANNEL } from '../shared/contracts/transport.js'
 import type { CodingNsRpcClient } from './features/types.js'
 import type { CodingNsSettingsStore } from '../dsh-capabilities/settings-store.js'
 import { LOGIN_PROTECTION_SESSION_EVENT, readLoginProtectionSession, writeLoginProtectionSession } from './features/login-protection-session.js'
+import { dshThemeColor } from './theme.js'
 
 const SETTINGS_BUTTON_SELECTOR = 'button[aria-label="设置"]'
 const ACCOUNT_ATTRIBUTE = 'data-codingns-account-button'
@@ -413,7 +414,7 @@ function createAccountIcon(dom: Document): SVGSVGElement {
 function createMenu(dom: Document): HTMLElement {
   const menu = dom.createElement('div')
   menu.setAttribute(MENU_ATTRIBUTE, '')
-  Object.assign(menu.style, { position: 'fixed', zIndex: '10000', width: '260px', display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px', boxSizing: 'border-box', color: 'var(--dsw-alias-label-primary, CanvasText)', background: 'var(--dsw-specific-menu, Canvas)', border: '1px solid var(--dsw-alias-border-l2, #d9d9d9)', borderRadius: '8px', boxShadow: 'var(--dsw-elevation-prominent, 0 12px 40px rgba(0,0,0,.25))', fontSize: '12px' })
+  Object.assign(menu.style, { position: 'fixed', zIndex: '10000', width: '260px', display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px', boxSizing: 'border-box', color: dshThemeColor.labelPrimary, background: dshThemeColor.menuBackground, border: `1px solid ${dshThemeColor.border}`, borderRadius: '8px', boxShadow: dshThemeColor.prominentShadow, fontSize: '12px' })
   return menu
 }
 

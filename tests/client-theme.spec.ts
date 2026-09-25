@@ -21,12 +21,23 @@ test('表单控件使用 DSH 真实主题令牌', () => {
 })
 
 test('弹窗表面同时设置 DSH 背景、前景和阴影', () => {
-  assert.match(String(dshPopupSurfaceStyle.background), /--dsw-alias-bg-layer-3/u)
-  assert.match(String(dshPopupSurfaceStyle.background), /--dsw-alias-bg-l1/u)
+  assert.match(String(dshThemeColor.menuBackground), /--dsw-alias-bg-layer-3/u)
+  assert.match(String(dshThemeColor.menuBackground), /--dsw-alias-bg-l1/u)
   assert.match(String(dshPopupSurfaceStyle.background), /--dsw-specific-menu/u)
   assert.match(String(dshPopupSurfaceStyle.color), /--dsw-alias-label-primary/u)
   assert.match(String(dshPopupSurfaceStyle.boxShadow), /--dsw-elevation-prominent/u)
   assert.match(dshThemeColor.overlay, /--dsw-alias-bg-mask-1/u)
+})
+
+test('所有弹层组件复用跨 DSH 版本的实底主题令牌', async () => {
+  const files = [
+    'src/client/account-bar.ts',
+    'src/client/debug/ui.ts',
+    'src/client/workspace-session-archive-dom.ts',
+    'src/client/subscription-slot.ts',
+  ]
+  const sources = await Promise.all(files.map((file) => readFile(join(projectRoot, file), 'utf8')))
+  for (const source of sources) assert.doesNotMatch(source, /background:\s*['"]var\(--dsw-specific-menu/u)
 })
 
 test('所有 Client 表单不再引用不存在的旧主题令牌', async () => {

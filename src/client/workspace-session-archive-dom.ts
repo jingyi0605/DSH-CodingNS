@@ -1,3 +1,5 @@
+import { dshThemeColor } from './theme.js'
+
 /** 归档入口和模态框节点使用的标记，便于重复扫描与停用时完整清理。 */
 export const WORKSPACE_SESSION_ARCHIVE_ATTRIBUTE = 'data-codingns-session-archive'
 export const WORKSPACE_SESSION_ARCHIVE_MODAL_ATTRIBUTE = 'data-codingns-session-archive-modal'
@@ -474,8 +476,8 @@ function openArchiveModal(
   surface.setAttribute('aria-label', '已归档的会话')
   Object.assign(surface.style, {
     width: 'min(860px, 100%)', maxHeight: 'min(720px, 90vh)', overflow: 'auto', boxSizing: 'border-box',
-    padding: '28px 32px', borderRadius: '16px', color: 'var(--dsw-alias-label-primary, CanvasText)',
-    background: 'var(--dsw-specific-menu, Canvas)', boxShadow: 'var(--dsw-elevation-prominent, 0 12px 40px rgba(0,0,0,.25))',
+    padding: '28px 32px', borderRadius: '16px', color: dshThemeColor.labelPrimary,
+    background: dshThemeColor.menuBackground, boxShadow: dshThemeColor.prominentShadow,
   })
   const header = dom.createElement('div')
   Object.assign(header.style, { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '18px' })
