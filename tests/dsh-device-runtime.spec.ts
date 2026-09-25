@@ -32,11 +32,14 @@ function ticket() {
 
 test('DSH Host 首次启动注册独立设备并保存 device credential', async () => {
   const calls: string[] = []
+  let registrationRequest: Record<string, unknown> | null = null
+  let heartbeatDetails: Record<string, unknown> | undefined
   let closedSockets = 0
   const store = new InMemoryDshDeviceCredentialStore()
   const control = {
-    async registerDshDevice() {
+    async registerDshDevice(_accessToken: string, request: Record<string, unknown>) {
       calls.push('register')
+      registrationRequest = request
       return {
         device: {
           dshDeviceId: 'dsh-device-1', deviceId: 'dsh-device-1', displayName: 'DSH Host', protocolVersion: 'dsh-envelope-v1', capabilities: ['rpc'],
@@ -48,7 +51,7 @@ test('DSH Host 首次启动注册独立设备并保存 device credential', async
       }
     },
     async listDshDevices() { calls.push('list'); return { devices: [] } },
-    async heartbeatDshDevice() { calls.push('heartbeat'); return { device: {} as never, credentialVersion: 1 } },
+    async heartbeatDshDevice(_accessToken: string, _deviceId: string, _credential: string, details?: Record<string, unknown>) { calls.push('heartbeat'); heartbeatDetails = details; return { device: {} as never, credentialVersion: 1 } },
     async createDshRelayTicket() { calls.push('ticket'); return { ...ticket(), product: 'codingns4dsh' as const, dshDeviceId: 'dsh-device-1' } },
   }
   const signalingSocketFactory = async () => {
@@ -80,6 +83,10 @@ test('DSH Host 首次启动注册独立设备并保存 device credential', async
     heartbeatIntervalMs: 0,
   } as never)
   assert.equal(runtime.credential.deviceId, 'dsh-device-1')
+  assert.equal(registrationRequest?.dshVersion, '0.1.6-alpha.2')
+  assert.equal(typeof registrationRequest?.computerName, 'string')
+  assert.equal(heartbeatDetails?.dshVersion, '0.1.6-alpha.2')
+  assert.equal(typeof heartbeatDetails?.computerName, 'string')
   assert.equal((await store.read())?.deviceCredential, 'secret-device-credential')
   assert.deepEqual(calls.slice(0, 3), ['register', 'heartbeat', 'ticket'])
   const replacement = await startDshHostDeviceRuntime({

@@ -129,7 +129,17 @@ function parseDshCredential(value: unknown): DshDeviceCredentialRecord {
   if (!isRecord(value) || typeof value.deviceId !== 'string' || typeof value.deviceCredential !== 'string' || typeof value.credentialVersion !== 'number' || !Number.isInteger(value.credentialVersion) || value.credentialVersion < 1 || typeof value.dtlsFingerprint !== 'string' || (typeof value.tunnelDomain !== 'string' && value.tunnelDomain !== null) || typeof value.displayName !== 'string' || typeof value.savedAt !== 'string') {
     throw new Error('DSH device credential 文件格式无效')
   }
-  return { deviceId: value.deviceId, deviceCredential: value.deviceCredential, credentialVersion: value.credentialVersion, dtlsFingerprint: value.dtlsFingerprint, tunnelDomain: value.tunnelDomain, displayName: value.displayName, savedAt: value.savedAt }
+  return {
+    deviceId: value.deviceId,
+    deviceCredential: value.deviceCredential,
+    credentialVersion: value.credentialVersion,
+    dtlsFingerprint: value.dtlsFingerprint,
+    tunnelDomain: value.tunnelDomain,
+    displayName: value.displayName,
+    ...(typeof value.dshVersion === 'string' && value.dshVersion.trim() ? { dshVersion: value.dshVersion } : {}),
+    ...(typeof value.computerName === 'string' && value.computerName.trim() ? { computerName: value.computerName } : {}),
+    savedAt: value.savedAt,
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

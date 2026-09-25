@@ -196,6 +196,7 @@ export type {
   DshDeviceRegistrationResponse,
   DshDeviceListResponse,
   DshDeviceHeartbeatResponse,
+  DshDeviceHeartbeatRequest,
   DshRelayTicketRequest,
   DshRelayTicketResponse,
   DshRelayTicketLike,

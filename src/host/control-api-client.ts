@@ -9,6 +9,7 @@ import type {
 } from '../shared/contracts/auth.js'
 import type {
   DshDeviceHeartbeatResponse,
+  DshDeviceHeartbeatRequest,
   DshDeviceListResponse,
   DshDeviceRegistrationRequest,
   DshDeviceRegistrationResponse,
@@ -79,7 +80,7 @@ export interface CodingNsControlApiClient {
   ): Promise<RelaySignalingTicketResponse>
   registerDshDevice(accessToken: string, request: DshDeviceRegistrationRequest): Promise<DshDeviceRegistrationResponse>
   listDshDevices(accessToken: string): Promise<DshDeviceListResponse>
-  heartbeatDshDevice(accessToken: string, deviceId: string, deviceCredential: string): Promise<DshDeviceHeartbeatResponse>
+  heartbeatDshDevice(accessToken: string, deviceId: string, deviceCredential: string, details?: DshDeviceHeartbeatRequest): Promise<DshDeviceHeartbeatResponse>
   createDshRelayTicket(accessToken: string, request: DshRelayTicketRequest): Promise<DshRelayTicketResponse>
 }
 
@@ -161,10 +162,11 @@ export class HttpCodingNsControlApiClient implements CodingNsControlApiClient {
     return this.request(this.controlBaseUrl, CODINGNS_CONTROL_API_PATHS.dshDevices, { token: accessToken })
   }
 
-  heartbeatDshDevice(accessToken: string, deviceId: string, deviceCredential: string): Promise<DshDeviceHeartbeatResponse> {
+  heartbeatDshDevice(accessToken: string, deviceId: string, deviceCredential: string, details?: DshDeviceHeartbeatRequest): Promise<DshDeviceHeartbeatResponse> {
     return this.request(this.controlBaseUrl, `${CODINGNS_CONTROL_API_PATHS.dshDevices}/${encodeURIComponent(deviceId)}/heartbeat`, {
       method: 'POST',
       token: accessToken,
+      ...(details === undefined ? {} : { body: details }),
       headers: { 'x-dsh-device-credential': deviceCredential },
     })
   }

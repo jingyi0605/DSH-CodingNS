@@ -7,6 +7,10 @@ export interface DshDeviceSummary {
   /** 旧 DTO 兼容字段，服务端迁移期间可存在。 */
   deviceId?: string
   displayName: string
+  /** 当前 Host 运行的 DSH 应用版本。 */
+  dshVersion?: string
+  /** Host 所在操作系统返回的计算机名。 */
+  computerName?: string
   protocolVersion: string
   capabilities: string[]
   dtlsFingerprint: string
@@ -20,6 +24,8 @@ export interface DshDeviceSummary {
 
 export interface DshDeviceRegistrationRequest {
   displayName: string
+  dshVersion?: string
+  computerName?: string
   devicePublicKey: string
   dtlsFingerprint: string
   protocolVersion: string
@@ -40,6 +46,11 @@ export interface DshDeviceListResponse {
 export interface DshDeviceHeartbeatResponse {
   device: DshDeviceSummary
   credentialVersion: number
+}
+
+export interface DshDeviceHeartbeatRequest {
+  dshVersion?: string
+  computerName?: string
 }
 
 export interface DshRelayTicketRequest {
@@ -74,5 +85,7 @@ export interface DshDeviceCredentialRecord {
   dtlsFingerprint: string
   tunnelDomain: string | null
   displayName: string
+  dshVersion?: string
+  computerName?: string
   savedAt: string
 }
