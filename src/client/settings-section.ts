@@ -2,8 +2,6 @@ import { createElement, useState, useSyncExternalStore } from 'react'
 import type { ReactElement } from 'react'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
-  SettingsScope,
-  SettingsScopeSnapshot,
   SettingsSectionOwnerProps,
 } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -32,6 +30,7 @@ import {
 } from './theme.js'
 import { useCodingNsTranslator } from './locale.js'
 import { CODINGNS_VERSION, DSH_COMPATIBILITY, isLegacyDshVersion } from '../shared/contracts/version.js'
+import type { CodingNsSettingsSnapshot, CodingNsSettingsStore } from '../dsh-capabilities/settings-store.js'
 
 const CODINGNS_GITHUB_URL = 'https://github.com/jingyi0605/DSH-CodingNS'
 
@@ -48,7 +47,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 export interface CodingNsSectionProps extends PropsRuntime<'settings.section'> {
-  readonly settings: SettingsScope<CodingNsSettings>
+  readonly settings: CodingNsSettingsStore<CodingNsSettings>
   readonly registry: FeatureRegistry<CodingNsClientServices, CodingNsClientFeatureModule>
   readonly services: CodingNsClientServices
   /** 当前 Client 进程启动时捕获的重启生效模块状态。 */
@@ -97,7 +96,7 @@ export function CodingNsSettingsSection({ settings, registry, services, restartS
 
 interface FeatureCardProps {
   readonly entry: CodingNsSettingsModule
-  readonly snapshot: SettingsScopeSnapshot<CodingNsSettings>
+  readonly snapshot: CodingNsSettingsSnapshot<CodingNsSettings>
   readonly services: CodingNsClientServices
   readonly restartStates: RestartFeatureStates
 }

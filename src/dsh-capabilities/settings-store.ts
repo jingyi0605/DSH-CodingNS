@@ -27,7 +27,7 @@ export interface CodingNsSettingsStore<T> {
   dispose?(): void | Promise<void>
 }
 
-/** 将任意 Promise<void> 写入适配成内部统一的成功布尔值。 */
-export function accepted(write: Promise<void>): Promise<boolean> {
-  return write.then(() => true)
+/** 将 DSH 两代写入结果统一成内部成功布尔值。 */
+export function accepted(write: Promise<void | boolean>): Promise<boolean> {
+  return write.then((result) => result !== false)
 }

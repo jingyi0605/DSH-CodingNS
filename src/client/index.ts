@@ -24,10 +24,12 @@ import {
   type CodingNsSettings,
 } from '../shared/contracts/config.js'
 import { CLIENT_FEATURES } from './features/index.js'
-import type { CodingNsClientFeatureModule, CodingNsClientServices } from './features/types.js'
+import type { CodingNsClientFeatureModule, CodingNsClientServices, CodingNsRpcClient } from './features/types.js'
 import { ensureCryptoRandomUUID } from './lan-access.js'
 import { CodingNsSettingsSection } from './settings-section.js'
 import { createCodingNsSettingsBridge } from './settings-bridge.js'
+import { createConfigFormSettingsStore, type DshClientConfigForms, type DshConfigForm } from '../dsh-capabilities/client/config-forms-adapter.js'
+import type { CodingNsSettingsStore } from '../dsh-capabilities/settings-store.js'
 import { CodingNsWebTerminals, registerCodingNsTerminalUi } from './terminal/index.js'
 import type { TerminalRemote } from './terminal/model.js'
 import { startCodingNsAccountBar } from './account-bar.js'
@@ -68,7 +70,7 @@ export { CodingNsTerminalView, CodingNsWebTerminals, registerCodingNsTerminalUi 
 export { registerSubscriptionSlot, registerCommandCodeSubscriptionSlot, CommandCodeSubscriptionSlot } from './subscription-slot.js'
 
 /** Client Runner 用于等待服务就绪的 Cordis 依赖声明。 */
-export const inject = ['slots', 'settingsScope', 'connection', 'remote', 'remote.workspace', 'remote.session', 'remote.terminal', 'sidebarRight', 'sidebarRightTabs', 'theme', 'locale', 'uiConversation'] as const
+export const inject = ['slots', 'connection', 'remote', 'remote.workspace', 'remote.session', 'remote.terminal', 'sidebarRight', 'sidebarRightTabs', 'theme', 'locale', 'uiConversation'] as const
 
 /**
  * 把 CodingNS 设置页挂载到 DSH 设置左侧导航，并让模块开关驱动启停。
@@ -83,14 +85,11 @@ export function apply(ctx?: Context): void {
   ensureCryptoRandomUUID()
   ctx.effect(() => registerCodingNsLocale(ctx), 'dsh-codingns: Client 词典')
 
-  ctx.inject(['slots', 'settingsScope', 'connection', 'remote', 'remote.workspace', 'remote.session', 'remote.terminal', 'sidebarRight', 'sidebarRightTabs', 'theme', 'locale', 'uiConversation'], (settingsCtx) => {
-    const localSettings = settingsCtx.settingsScope.bind<CodingNsSettings>({
-      namespace: CODINGNS_SETTINGS_NAMESPACE,
-    })
+  ctx.inject(['slots', 'connection', 'remote', 'remote.workspace', 'remote.session', 'remote.terminal', 'sidebarRight', 'sidebarRightTabs', 'theme', 'locale', 'uiConversation'], (settingsCtx) => {
     // Host 与 Client 共用同一个 cordis Context 类型，而 DSH 的 Host 侧声明会把
     // connection 收窄成 Host 句柄；浏览器侧按 ConnectionHandle 收窄回真实形状。
     const connection = settingsCtx.connection as unknown as ConnectionHandle
-    const settings = createCodingNsSettingsBridge(localSettings, connection.rpc)
+    const settings = createClientSettingsStore(settingsCtx, connection.rpc)
     // Typert manifest 可能晚于立即加载的 Client 入口完成登记，必须在每次调用时取 Remote。
     // DSH 0.1.7 的 ClientRemote 声明可能尚未包含插件按需挂载的 terminal 命名空间。
     // 运行时仍由 Typert manifest 提供该字段，因此在边界处按可选动态服务读取。
@@ -129,16 +128,19 @@ export function apply(ctx?: Context): void {
           })
       }
       sync()
-      void settings.load().catch((error: unknown) => {
-        console.error('dsh-codingns: 远程设置读取失败', error)
-      })
+      const loading = settings.load?.()
+      if (loading !== undefined) {
+        void loading.catch((error: unknown) => {
+          console.error('dsh-codingns: 远程设置读取失败', error)
+        })
+      }
       const unsubscribe = settings.subscribe(sync)
       return () => {
         unsubscribe()
         disposeTerminalUi()
         disposeAccountBar.dispose()
         void webTerminals.dispose()
-        settings.dispose()
+        void settings.dispose?.()
       }
     }, 'dsh-codingns: 功能模块启停同步')
 
@@ -150,4 +152,30 @@ export function apply(ctx?: Context): void {
       inject: () => ({ settings, registry, services, restartStates }),
     }, CodingNsSettingsSection))
   })
+}
+
+/** 在设置服务改名期间选择旧 Scope 或 0.1.7 ConfigForm，业务层只接收内部 Store。 */
+function createClientSettingsStore(ctx: Context, rpc: CodingNsRpcClient): CodingNsSettingsStore<CodingNsSettings> {
+  const scopeBinder = ctx.get('settingsScope') as { bind?: (spec: { readonly namespace: string }) => Parameters<typeof createCodingNsSettingsBridge>[0] } | undefined
+  if (typeof scopeBinder?.bind === 'function') {
+    const local = scopeBinder.bind({ namespace: CODINGNS_SETTINGS_NAMESPACE })
+    return createCodingNsSettingsBridge(local, rpc)
+  }
+
+  const forms = ctx.get('configForms') as DshClientConfigForms | undefined
+  const form = findConfigForm(forms)
+  return createConfigFormSettingsStore({ get: <T>() => form as DshConfigForm<T> | undefined }, CODINGNS_SETTINGS_NAMESPACE)
+}
+
+function findConfigForm(forms: DshClientConfigForms | undefined): DshConfigForm<CodingNsSettings> | undefined {
+  if (forms === undefined) return undefined
+  for (const id of ['dsh-codingns', CODINGNS_SETTINGS_NAMESPACE]) {
+    try {
+      const form = forms.get<CodingNsSettings>(id)
+      if (form !== undefined) return form
+    } catch {
+      // 不同 0.1.7 构建可能只接受其中一个 entry id，继续尝试别名。
+    }
+  }
+  return undefined
 }

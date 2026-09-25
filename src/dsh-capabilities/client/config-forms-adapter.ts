@@ -5,9 +5,9 @@ import { accepted, type CodingNsSettingsStore } from '../settings-store.js'
 export interface DshConfigForm<T> {
   getSnapshot(): { readonly value: T | undefined; readonly revision?: number; readonly writable: boolean; readonly status?: 'loading' | 'ready' | 'unavailable' }
   subscribe(listener: () => void): () => void
-  mutate(operations: readonly { readonly op: 'set' | 'unset'; readonly path: readonly string[]; readonly value?: unknown }[], expectedRevision?: number): Promise<void>
-  set(field: string, value: unknown): Promise<void>
-  unset(field: string): Promise<void>
+  mutate(operations: readonly { readonly op: 'set' | 'unset'; readonly path: readonly string[]; readonly value?: unknown }[], expectedRevision?: number): Promise<void | boolean>
+  set(field: string, value: unknown): Promise<void | boolean>
+  unset(field: string): Promise<void | boolean>
 }
 
 export interface DshClientConfigForms {

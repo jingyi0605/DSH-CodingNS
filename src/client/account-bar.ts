@@ -3,7 +3,7 @@ import type { CodingNsSettings } from '../shared/contracts/config.js'
 import type { DshHostStatus } from '../shared/contracts/host-status.js'
 import { CODINGNS_RPC_CHANNEL } from '../shared/contracts/transport.js'
 import type { CodingNsRpcClient } from './features/types.js'
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { CodingNsSettingsStore } from '../dsh-capabilities/settings-store.js'
 
 const SETTINGS_BUTTON_SELECTOR = 'button[aria-label="设置"]'
 const ACCOUNT_ATTRIBUTE = 'data-codingns-account-button'
@@ -13,7 +13,7 @@ const POLL_MS = 5_000
 export interface AccountBarController { dispose(): void }
 
 /** 在 DSH 设置触发器旁挂载统一账户入口，兼容侧栏横排与收起竖排。 */
-export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, settings?: SettingsScope<CodingNsSettings>): AccountBarController {
+export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, settings?: CodingNsSettingsStore<CodingNsSettings>): AccountBarController {
   const currentDocument = dom ?? (typeof document === 'undefined' ? undefined : document)
   if (currentDocument === undefined) return { dispose() {} }
   const root = currentDocument

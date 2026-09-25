@@ -66,6 +66,17 @@ export const CodingNsSettingsSchema: z<CodingNsSettings> = z.object({
   }).default(DEFAULT_CODINGNS_SETTINGS.workspaceSessionEnhancement),
 })
 
+/**
+ * DSH 0.1.7 Config 导出使用的配置模型。
+ *
+ * cliSessions 是 Host 运行时索引，不应进入 ConfigForm 或浏览器配置镜像；
+ * volatile 字段仍允许旧版 SettingsScope 继续读取，但由新版配置系统排除持久化。
+ */
+export const CodingNsConfigSchema = CodingNsSettingsSchema.set(
+  'cliSessions',
+  z.array(z.any()).default(DEFAULT_CODINGNS_SETTINGS.cliSessions ?? []).volatile(),
+)
+
 /** 颜色字段只接受完整十六进制颜色，`null` 表示继承 DSH 原生值。 */
 function nullableColorSchema(): z<string | null> {
   return z.union([z.string().pattern(/^#[0-9A-Fa-f]{6}$/u), z.const(null)]).default(null)

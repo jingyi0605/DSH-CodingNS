@@ -1,7 +1,8 @@
-import type { SettingsScope, SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { CODINGNS_RPC_CHANNEL } from '../shared/contracts/transport.js'
 import type { CodingNsSettings } from '../shared/contracts/config.js'
 import type { CodingNsRpcClient } from './features/types.js'
+import type { CodingNsSettingsSnapshot, CodingNsSettingsStore } from '../dsh-capabilities/settings-store.js'
 
 type SettingsMutation = Parameters<SettingsScope<CodingNsSettings>['mutate']>[0]
 type SnapshotListener = () => void
@@ -15,8 +16,8 @@ interface RemoteSettingsResponse {
  * 把 DSH 本地设置和远程 Host 设置 RPC 统一成一个设置作用域。
  * 非回环页面使用 RPC，回环页面完全复用 DSH 的原生设置传输。
  */
-export class CodingNsSettingsBridge implements SettingsScope<CodingNsSettings> {
-  private snapshot: SettingsScopeSnapshot<CodingNsSettings>
+export class CodingNsSettingsBridge implements CodingNsSettingsStore<CodingNsSettings> {
+  private snapshot: CodingNsSettingsSnapshot<CodingNsSettings>
   private readonly listeners = new Set<SnapshotListener>()
   private readonly localUnsubscribe: () => void
   private remoteLoad: Promise<void> | undefined
@@ -26,18 +27,18 @@ export class CodingNsSettingsBridge implements SettingsScope<CodingNsSettings> {
     private readonly local: SettingsScope<CodingNsSettings>,
     private readonly rpc: CodingNsRpcClient,
   ) {
-    this.snapshot = local.getSnapshot()
+    this.snapshot = toStoreSnapshot(local.getSnapshot())
     this.localUnsubscribe = local.subscribe(() => {
       if (this.isRemote()) {
         void this.load().catch(() => undefined)
         return
       }
       this.remoteLoaded = false
-      this.publish(local.getSnapshot())
+      this.publish(toStoreSnapshot(local.getSnapshot()))
     })
   }
 
-  getSnapshot(): SettingsScopeSnapshot<CodingNsSettings> { return this.snapshot }
+  getSnapshot(): CodingNsSettingsSnapshot<CodingNsSettings> { return this.snapshot }
 
   subscribe(listener: SnapshotListener): () => void {
     this.listeners.add(listener)
@@ -53,11 +54,8 @@ export class CodingNsSettingsBridge implements SettingsScope<CodingNsSettings> {
       this.publish({
         status: 'ready',
         value: response.value,
-        base: undefined,
-        user: undefined,
         revision: response.revision,
         writable: true,
-        mode: 'host',
       })
     }).finally(() => {
       this.remoteLoad = undefined
@@ -65,18 +63,27 @@ export class CodingNsSettingsBridge implements SettingsScope<CodingNsSettings> {
     return this.remoteLoad
   }
 
-  async set(field: string, value: unknown): Promise<void> {
-    if (!this.isRemote()) return this.local.set(field, value)
+  async set(field: string, value: unknown): Promise<boolean> {
+    if (!this.isRemote()) {
+      await this.local.set(field, value)
+      return true
+    }
     return this.mutate([{ op: 'set', path: [field], value: toJsonValue(value) }])
   }
 
-  async unset(field: string): Promise<void> {
-    if (!this.isRemote()) return this.local.unset(field)
+  async unset(field: string): Promise<boolean> {
+    if (!this.isRemote()) {
+      await this.local.unset(field)
+      return true
+    }
     return this.mutate([{ op: 'unset', path: [field] }])
   }
 
-  async mutate(ops: SettingsMutation, expectedRevision?: number): Promise<void> {
-    if (!this.isRemote()) return this.local.mutate(ops, expectedRevision)
+  async mutate(ops: SettingsMutation, expectedRevision?: number): Promise<boolean> {
+    if (!this.isRemote()) {
+      await this.local.mutate(ops, expectedRevision)
+      return true
+    }
     const payload = expectedRevision === undefined ? { ops } : { ops, expectedRevision }
     const response = await this.call<RemoteSettingsResponse>('settings/set', payload)
     this.remoteLoaded = true
@@ -86,8 +93,8 @@ export class CodingNsSettingsBridge implements SettingsScope<CodingNsSettings> {
       value: response.value,
       revision: response.revision,
       writable: true,
-      mode: 'host',
     })
+    return true
   }
 
   dispose(): void { this.localUnsubscribe() }
@@ -107,7 +114,7 @@ export class CodingNsSettingsBridge implements SettingsScope<CodingNsSettings> {
     return result.value as T
   }
 
-  private publish(next: SettingsScopeSnapshot<CodingNsSettings>): void {
+  private publish(next: CodingNsSettingsSnapshot<CodingNsSettings>): void {
     this.snapshot = next
     for (const listener of [...this.listeners]) listener()
   }
@@ -136,4 +143,13 @@ export function createCodingNsSettingsBridge(
   rpc: CodingNsRpcClient,
 ): CodingNsSettingsBridge {
   return new CodingNsSettingsBridge(local, rpc)
+}
+
+function toStoreSnapshot(snapshot: {
+  readonly value: CodingNsSettings | undefined
+  readonly revision: number | undefined
+  readonly writable: boolean
+  readonly status: 'loading' | 'ready' | 'unavailable'
+}): CodingNsSettingsSnapshot<CodingNsSettings> {
+  return { value: snapshot.value, revision: snapshot.revision, writable: snapshot.writable, status: snapshot.status }
 }

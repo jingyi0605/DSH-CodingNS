@@ -15,7 +15,6 @@ import {
   Menu,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
@@ -28,6 +27,7 @@ import { CodingNsWebTerminals, type WebTerminalId } from './model.js'
 import { installTerminalStyles, terminalClass } from './styles.js'
 import { CodingNsXtermView } from './xterm-view.js'
 import { codingNsTranslator, useCodingNsTranslator, type CodingNsLocale } from '../locale.js'
+import type { CodingNsSettingsStore } from '../../dsh-capabilities/settings-store.js'
 
 export const TERMINAL_PROVIDER_ID = 'dsh-codingns/terminal'
 export const TERMINAL_KIND = 'terminal'
@@ -44,7 +44,7 @@ interface TerminalThemeSource {
 
 interface TerminalInjected {
   readonly webTerminals: CodingNsWebTerminals
-  readonly settings: SettingsScope<CodingNsSettings>
+  readonly settings: CodingNsSettingsStore<CodingNsSettings>
   readonly theme: TerminalThemeSource
   readonly locale: CodingNsLocale
   readonly legacyCloseFallback: boolean
@@ -70,7 +70,7 @@ interface TerminalGuideProps extends TerminalGuideEntryOwnerProps {
 export function registerCodingNsTerminalUi(
   ctx: Context,
   webTerminals: CodingNsWebTerminals,
-  settings: SettingsScope<CodingNsSettings>,
+  settings: CodingNsSettingsStore<CodingNsSettings>,
 ): () => void {
   const disposers: Array<() => void> = []
   const t = codingNsTranslator(ctx.locale)

@@ -5,8 +5,8 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import type { ITheme } from '@xterm/xterm'
 import xtermCss from '@xterm/xterm/css/xterm.css'
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { resolvePlusIcon } from '../../dsh-capabilities/client/primitives-adapter.js'
+import type { CodingNsSettingsStore } from '../../dsh-capabilities/settings-store.js'
 import {
   DEFAULT_TERMINAL_ENHANCEMENT_SETTINGS,
   type CodingNsSettings,
@@ -17,7 +17,7 @@ import { terminalClass } from './styles.js'
 
 export interface CodingNsXtermViewProps {
   readonly view: CodingNsTerminalView
-  readonly settings: SettingsScope<CodingNsSettings>
+  readonly settings: CodingNsSettingsStore<CodingNsSettings>
   readonly themeRevision: number
   readonly onNewTerminal: () => void
 }

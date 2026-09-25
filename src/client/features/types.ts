@@ -1,10 +1,10 @@
 import type { ReactElement } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type { SettingsScope, SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { FeatureModule } from '../../shared/contracts/feature.js'
 import type { CodingNsSettings } from '../../shared/contracts/config.js'
 import type { CodingNsLocale } from '../locale.js'
+import type { CodingNsSettingsSnapshot, CodingNsSettingsStore } from '../../dsh-capabilities/settings-store.js'
 
 /** 一次 CodingNS RPC 的结果，与 DSH Connection 的结果形状一致。 */
 export type CodingNsRpcResult =
@@ -20,7 +20,7 @@ export interface CodingNsRpcClient {
 export interface CodingNsClientServices {
   /** 当前 DSH 实际运行版本，由 Host 注入。 */
   readonly dshVersion: string
-  readonly settings: SettingsScope<CodingNsSettings>
+  readonly settings: CodingNsSettingsStore<CodingNsSettings>
   readonly rpc: CodingNsRpcClient
   /** DSH Typert Remote；归档会话模块只通过运行时探测调用可选方法。 */
   readonly remote?: unknown
@@ -41,7 +41,7 @@ export interface FeaturePanelProps {
   /** 当前是否启用；未启用时面板需要自行灰显并禁用输入。 */
   readonly enabled: boolean
   /** 设置快照，用于读取表单初值和可写状态。 */
-  readonly snapshot: SettingsScopeSnapshot<CodingNsSettings>
+  readonly snapshot: CodingNsSettingsSnapshot<CodingNsSettings>
 }
 
 /**

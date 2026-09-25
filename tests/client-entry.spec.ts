@@ -109,6 +109,15 @@ test('Client 构建产物声明 Cordis 服务依赖', async () => {
   }
 })
 
+test('Client 入口兼容 DSH 0.1.7 ConfigForm，不把旧 settingsScope 作为硬依赖', async () => {
+  const source = await readFile(clientSource, 'utf8')
+  const injectDeclaration = source.match(/export const inject = \[([^\]]+)\]/u)?.[1] ?? ''
+  assert.equal(injectDeclaration.includes('settingsScope'), false)
+  assert.match(source, /ctx\.get\('configForms'\)/u)
+  assert.match(source, /ctx\.get\('settingsScope'\)/u)
+  assert.match(source, /createConfigFormSettingsStore/u)
+})
+
 test('Client 构建产物提供自有 webTerminals 与 Sidebar 终端', async () => {
   const source = await readFile(clientBundle, 'utf8')
   for (const marker of [

@@ -3,6 +3,8 @@ import { apply as hostApply } from './host/index.js'
 
 /** Cordis Bundle 标准插件名称。 */
 export const name = 'dsh-codingns'
+/** DSH 0.1.7 原生配置入口；Host-only 的 cliSessions 已标记为 volatile。 */
+export { CodingNsConfigSchema as Config } from './host/settings.js'
 /** Host Cordis 入口。 */
 export const apply = hostApply
 export default hostApply
