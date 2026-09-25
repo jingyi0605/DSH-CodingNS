@@ -6,7 +6,7 @@ import type {
   LoginByEmailRequest,
   TunnelBindingSummary,
 } from '../shared/contracts/auth.js'
-import type { CodingNsControlApiClient } from './control-api-client.js'
+import { CodingNsControlApiError, type CodingNsControlApiClient } from './control-api-client.js'
 import type { RelaySignalingTicketResponse } from '../shared/contracts/signaling.js'
 import type { HostCredentialRecord, CodingNsCredentialStore } from './credential-store.js'
 
@@ -26,6 +26,7 @@ export class CodingNsAuthSession {
 
   private accessToken: string | null = null
   private credential: HostCredentialRecord | null = null
+  private refreshPromise: Promise<CodingNsAuthSessionSnapshot> | null = null
 
   constructor(
     private readonly client: CodingNsControlApiClient,
@@ -59,6 +60,20 @@ export class CodingNsAuthSession {
     return this.client
   }
 
+  /**
+   * 执行需要 access token 的请求；服务端拒绝旧 token 时只续期一次并重试。
+   * refresh token 仍然只留在 Host，调用方无需复制认证恢复逻辑。
+   */
+  async withAccessToken<T>(operation: (accessToken: string) => Promise<T>): Promise<T> {
+    try {
+      return await operation(this.requireAccessToken())
+    } catch (error) {
+      if (!(error instanceof CodingNsControlApiError) || error.status !== 401) throw error
+      await this.refresh()
+      return operation(this.requireAccessToken())
+    }
+  }
+
   /** 使用保存的 refresh token 恢复会话；没有凭据时保持 logged_out。 */
   async restore(): Promise<CodingNsAuthSessionSnapshot> {
     const credential = await this.credentials.read()
@@ -86,6 +101,12 @@ export class CodingNsAuthSession {
   }
 
   async refresh(): Promise<CodingNsAuthSessionSnapshot> {
+    if (this.refreshPromise !== null) return this.refreshPromise
+    this.refreshPromise = this.refreshInternal().finally(() => { this.refreshPromise = null })
+    return this.refreshPromise
+  }
+
+  private async refreshInternal(): Promise<CodingNsAuthSessionSnapshot> {
     const credential = this.credential ?? await this.credentials.read()
     if (!credential) {
       this.reset('logged_out')
@@ -114,27 +135,26 @@ export class CodingNsAuthSession {
   }
 
   async getDevices(): Promise<AuthDeviceManagementSnapshotDto> {
-    const token = this.requireAccessToken()
-    const devices = await this.client.getDevices(token)
+    const devices = await this.withAccessToken((accessToken) => this.client.getDevices(accessToken))
     this.state = { ...this.state, currentDevice: devices.currentDevice }
     return devices
   }
 
   async listHostBindings(): Promise<TunnelBindingSummary[]> {
-    const response = await this.client.listHostBindings(this.requireAccessToken())
+    const response = await this.withAccessToken((accessToken) => this.client.listHostBindings(accessToken))
     const binding = response.bindings[0] ?? null
     this.state = { ...this.state, binding }
     return response.bindings
   }
 
   async bindHost(request: HostBindRequest): Promise<TunnelBindingSummary> {
-    const response = await this.client.bindHost(this.requireAccessToken(), request)
+    const response = await this.withAccessToken((accessToken) => this.client.bindHost(accessToken, request))
     this.state = { ...this.state, binding: response.binding }
     return response.binding
   }
 
   async unbindHost(bindingId: string): Promise<TunnelBindingSummary> {
-    const response = await this.client.unbindHost(this.requireAccessToken(), bindingId)
+    const response = await this.withAccessToken((accessToken) => this.client.unbindHost(accessToken, bindingId))
     if (this.state.binding?.bindingId === response.binding.bindingId) {
       this.state = { ...this.state, binding: null }
     }
@@ -145,7 +165,7 @@ export class CodingNsAuthSession {
   async createClientSignalingTicket(tunnelDomain?: string): Promise<RelaySignalingTicketResponse> {
     const domain = tunnelDomain?.trim() || this.state.binding?.tunnelDomain
     if (!domain) throw new Error('Codingns4DSH 尚未绑定 Host')
-    return this.client.createSignalingTicket(this.requireAccessToken(), { tunnelDomain: domain })
+    return this.withAccessToken((accessToken) => this.client.createSignalingTicket(accessToken, { tunnelDomain: domain }))
   }
 
   private async saveResponse(response: {

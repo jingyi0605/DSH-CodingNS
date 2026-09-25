@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { CodingNsAuthSession } from '../data/build/dist/host/auth-session.js'
-import { CODINGNS_CONTROL_API_PATHS, HttpCodingNsControlApiClient } from '../data/build/dist/host/control-api-client.js'
+import { CodingNsControlApiError, CODINGNS_CONTROL_API_PATHS, HttpCodingNsControlApiClient } from '../data/build/dist/host/control-api-client.js'
 import { InMemoryCodingNsCredentialStore } from '../data/build/dist/host/credential-store.js'
 import type {
   AuthDeviceManagementSnapshotDto,
@@ -212,6 +212,22 @@ test('Host 绑定与解绑始终使用内存中的 access token', async () => {
   const released = await auth.unbindHost(binding.bindingId)
   assert.equal(released.bindingId, binding.bindingId)
   assert.deepEqual(client.calls.slice(-2), ['bind', 'unbind'])
+})
+
+test('控制面返回 401 时只续期一次并使用新 access token 重试', async () => {
+  const client = new FakeControlApiClient()
+  const auth = new CodingNsAuthSession(client, new InMemoryCodingNsCredentialStore(), 'https://control.example.com')
+  await auth.login({ email: account.email, password: 'secret' })
+  const seenTokens: string[] = []
+
+  const result = await auth.withAccessToken(async (accessToken) => {
+    seenTokens.push(accessToken)
+    if (seenTokens.length === 1) throw new CodingNsControlApiError('expired', 401, 'AUTH_INVALID')
+    return 'ok'
+  })
+
+  assert.equal(result, 'ok')
+  assert.deepEqual(seenTokens, ['access_1', 'access_2'])
 })
 
 test('退出会清除 Host 凭据和状态', async () => {

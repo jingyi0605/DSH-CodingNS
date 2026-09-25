@@ -96,6 +96,7 @@ export function createAuthFeature(): FeatureModule<CodingNsHostServices> {
               accessToken,
               credentialStore: dshCredentials,
               accessTokenProvider: () => target.getAccessToken(),
+              withAccessToken: <T>(operation: (accessToken: string) => Promise<T>) => target.withAccessToken(operation),
               ...(context.services.dshVersion === undefined ? {} : { dshVersion: context.services.dshVersion }),
               resources: context.resources,
               gatewayFeatures,
@@ -136,7 +137,10 @@ export function createAuthFeature(): FeatureModule<CodingNsHostServices> {
         bind: (payload) => requireSession().bindHost(parseHostBind(payload)),
         unbind: (payload) => requireSession().unbindHost(parseStringField(payload, 'bindingId')),
         signalingTicket: (payload) => requireSession().createClientSignalingTicket(parseOptionalStringField(payload, 'tunnelDomain')),
-        'dsh/device/list': () => requireSession().getControlClient().listDshDevices(requireSession().getAccessToken() ?? ''),
+        'dsh/device/list': () => {
+          const target = requireSession()
+          return target.withAccessToken((accessToken) => target.getControlClient().listDshDevices(accessToken))
+        },
         'dsh/device/start': async () => { await startDsh(requireSession()); return dshRuntime?.device ?? null },
         'dsh/device/stop': async () => { await dshRuntime?.stop(); dshRuntime = null; return { stopped: true } },
         'dsh/device/status': () => dshRuntime ? { device: dshRuntime.device, online: true } : { device: null, online: false },
@@ -150,8 +154,7 @@ export function createAuthFeature(): FeatureModule<CodingNsHostServices> {
           if (!dshRuntime) throw new CodingNsRpcError('DSH_DEVICE_OFFLINE', 'DSH Host 尚未上线')
           const input = isRecord(payload) && typeof payload.dshDeviceId === 'string' ? payload.dshDeviceId.trim() : ''
           if (!input || input !== dshRuntime.credential.deviceId) throw new CodingNsRpcError('DSH_DEVICE_NOT_FOUND', '请求的 DSH 设备不是当前 Host')
-          const accessToken = target.getAccessToken()
-          if (!accessToken) throw new CodingNsRpcError('CODINGNS_RPC_UNAUTHENTICATED', 'Codingns4DSH 尚未登录')
+          if (!target.getAccessToken()) throw new CodingNsRpcError('CODINGNS_RPC_UNAUTHENTICATED', 'Codingns4DSH 尚未登录')
           const request: DshRelayTicketRequest = {
             dshDeviceId: dshRuntime.credential.deviceId,
             deviceCredential: dshRuntime.credential.deviceCredential,
@@ -159,7 +162,7 @@ export function createAuthFeature(): FeatureModule<CodingNsHostServices> {
             credentialVersion: dshRuntime.credential.credentialVersion,
             role: 'client',
           }
-          return target.getControlClient().createDshRelayTicket(accessToken, request)
+          return target.withAccessToken((accessToken) => target.getControlClient().createDshRelayTicket(accessToken, request))
         },
       }
 
