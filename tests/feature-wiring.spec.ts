@@ -267,6 +267,21 @@ test('远程设置 RPC 返回版本并只允许修改 Codingns4DSH 字段', asyn
   )
 })
 
+test('远程设置 RPC 兼容 DSH 0.1.7 的插件 entry id', async () => {
+  const current = settingsOf({})
+  let namespace: string | undefined
+  const handler = createCodingNsSettingsRpcHandler({
+    writable: true,
+    describe: () => [{ ns: 'codingns4dsh', revision: 2, value: current }],
+    get: () => current,
+    mutate: async (updatedNamespace: string) => { namespace = updatedNamespace },
+  } as never)
+
+  assert.deepEqual(await handler('get', {}), { value: current, revision: 2 })
+  await handler('set', { ops: [{ op: 'set', path: ['modules', 'reverseProxy'], value: true }] })
+  assert.equal(namespace, 'codingns4dsh')
+})
+
 test('auth 模块通过服务登记 auth 命名空间，停用后自动注销', async () => {
   const table = new CodingNsRpcTable()
   const registry = new FeatureRegistry({ rpc: table })

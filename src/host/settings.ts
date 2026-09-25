@@ -4,6 +4,7 @@ import type { SettingsProvider, SettingsScope } from '@deepseek-ai/dsh-settings'
 import {
   CODINGNS_SETTINGS_NAMESPACE,
   DEFAULT_CODINGNS_SETTINGS,
+  type CodingNsConfig,
   type CodingNsSettings,
 } from '../shared/contracts/config.js'
 
@@ -67,15 +68,14 @@ export const CodingNsSettingsSchema: z<CodingNsSettings> = z.object({
 })
 
 /**
- * DSH 0.1.7 Config 导出使用的配置模型。
+ * DSH 0.1.7 只会把 `volatile` 配置投影成可编辑 ConfigForm。
  *
- * cliSessions 是 Host 运行时索引，不应进入 ConfigForm 或浏览器配置镜像；
- * volatile 字段仍允许旧版 SettingsScope 继续读取，但由新版配置系统排除持久化。
+ * 整个根节点标记为 volatile，保留 Host 侧 `cliSessions` 的持久化能力；
+ * Client 适配器会在镜像配置时剔除这个 Host-only 字段，避免会话索引进入浏览器。
  */
-export const CodingNsConfigSchema = CodingNsSettingsSchema.set(
-  'cliSessions',
-  z.array(z.any()).default(DEFAULT_CODINGNS_SETTINGS.cliSessions ?? []).volatile(),
-)
+export const CodingNsConfigSchema = CodingNsSettingsSchema.volatile() as unknown as z<CodingNsConfig>
+
+let lastConfigDescriptorSignature: string | undefined
 
 /** 颜色字段只接受完整十六进制颜色，`null` 表示继承 DSH 原生值。 */
 function nullableColorSchema(): z<string | null> {
@@ -94,7 +94,91 @@ function nullableNumberSchema(min: number, max: number): z<number | null> {
  */
 export function registerCodingNsSettings(ctx: Context): SettingsScope<CodingNsSettings> {
   const settings: SettingsProvider = ctx.settings
-  return settings.register(CODINGNS_SETTINGS_NAMESPACE, CodingNsSettingsSchema, {
-    applies: 'live',
+  const legacyRegister = (settings as SettingsProvider & {
+    register?: (
+      namespace: string,
+      schema: typeof CodingNsSettingsSchema,
+      options?: { readonly applies?: 'live' | 'restart' },
+    ) => SettingsScope<CodingNsSettings>
+  }).register
+  if (typeof legacyRegister === 'function') {
+    console.info('codingns4dsh: host settings source=legacy-settings')
+    return legacyRegister.call(settings, CODINGNS_SETTINGS_NAMESPACE, CodingNsSettingsSchema, {
+      applies: 'live',
+    })
+  }
+  console.info('codingns4dsh: host settings source=config-forms')
+  return createConfigSettingsScope(ctx, settings)
+}
+
+/** 将 DSH 0.1.7 SettingsForms 适配成 Host 业务沿用的 SettingsScope。 */
+function createConfigSettingsScope(ctx: Context, settings: SettingsProvider): SettingsScope<CodingNsSettings> {
+  const provider = settings as SettingsProvider & {
+    update?: (namespace: string, patch: object, expectedRevision?: number) => Promise<void>
+    replace?: (namespace: string, section: object, expectedRevision?: number) => Promise<void>
+  }
+  let previous = readConfigSettings(provider)
+  const listeners = new Set<(next: CodingNsSettings, prev: CodingNsSettings) => void | Promise<void>>()
+  const eventContext = ctx as Context & {
+    on?: (name: string, listener: (namespace: string) => void) => () => void
+  }
+  const disposeEvent = eventContext.on?.('settings/document-updated', (namespace) => {
+    if (!isCodingNsSettingsNamespace(namespace)) return
+    const next = readConfigSettings(provider)
+    const prev = previous
+    previous = next
+    if (next === prev) return
+    for (const listener of [...listeners]) void listener(next, prev)
   })
+  if (disposeEvent !== undefined) {
+    ctx.effect(() => disposeEvent, 'codingns4dsh: ConfigForm 设置监听')
+  }
+  return {
+    get: () => readConfigSettings(provider),
+    watch: (listener) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    update: async (patch) => {
+      if (typeof provider.update !== 'function') throw new Error('DSH ConfigForms 不支持 update')
+      await provider.update(resolveConfigSettingsNamespace(provider), patch)
+    },
+    replace: async (section) => {
+      if (typeof provider.replace !== 'function') throw new Error('DSH ConfigForms 不支持 replace')
+      await provider.replace(resolveConfigSettingsNamespace(provider), section)
+    },
+  }
+}
+
+function readConfigSettings(settings: Pick<SettingsProvider, 'describe'>): CodingNsSettings {
+  const descriptor = findConfigSettingsDescriptor(settings)
+  if (descriptor === undefined) {
+    console.warn('codingns4dsh: host ConfigForms 未找到设置 namespace，使用默认值')
+    return DEFAULT_CODINGNS_SETTINGS
+  }
+  return descriptor.value as CodingNsSettings
+}
+
+/** DSH 0.1.7 使用插件 entry id；旧 SettingsScope 使用显式 namespace。 */
+function findConfigSettingsDescriptor(settings: Pick<SettingsProvider, 'describe'>) {
+  const descriptors = settings.describe({ redactSecrets: false })
+  const signature = JSON.stringify(descriptors.map((item) => ({
+    ns: item.ns,
+    revision: item.revision,
+    writable: (item as { writable?: unknown }).writable,
+    hasValue: item.value !== undefined,
+  })))
+  if (signature !== lastConfigDescriptorSignature) {
+    lastConfigDescriptorSignature = signature
+    console.info('codingns4dsh: host ConfigForms descriptors', JSON.parse(signature) as unknown)
+  }
+  return descriptors.find((item) => isCodingNsSettingsNamespace(item.ns))
+}
+
+function resolveConfigSettingsNamespace(settings: Pick<SettingsProvider, 'describe'>): string {
+  return findConfigSettingsDescriptor(settings)?.ns ?? CODINGNS_SETTINGS_NAMESPACE
+}
+
+function isCodingNsSettingsNamespace(namespace: unknown): namespace is string {
+  return namespace === CODINGNS_SETTINGS_NAMESPACE || namespace === 'codingns4dsh'
 }

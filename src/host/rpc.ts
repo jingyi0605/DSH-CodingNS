@@ -15,13 +15,18 @@ import { CodingNsRpcError, type CodingNsRpcHandler, type CodingNsRpcTable } from
  */
 export function createCodingNsRpcHandler(table: CodingNsRpcTable): ConnectionRpcHandler {
   return async (endpoint, payload, signal) => {
+    console.info('codingns4dsh: host rpc request', { endpoint })
     const target = table.resolve(endpoint)
     if (target === null) {
+      console.warn('codingns4dsh: host rpc endpoint not found', { endpoint })
       return failure('CODINGNS_RPC_NOT_FOUND', `未知 Codingns4DSH RPC: ${endpoint}`)
     }
     try {
-      return success(await target.handler(target.action, payload, { signal }))
+      const value = await target.handler(target.action, payload, { signal })
+      console.info('codingns4dsh: host rpc success', { endpoint })
+      return success(value)
     } catch (error) {
+      console.error('codingns4dsh: host rpc handler failed', { endpoint, error })
       return failure(errorCode(error), error instanceof Error ? error.message : String(error))
     }
   }
@@ -34,16 +39,27 @@ export function registerCodingNsRpc(ctx: Context, table: CodingNsRpcTable, setti
   // 注入的服务实例，挂载同协议的前缀路由，避免把 RPC 请求落到 SPA fallback。
   const webServer = (ctx as Context & { webServer: WebServerLike }).webServer
   const connection = ctx.connection
+  console.info('codingns4dsh: host rpc registration begin', {
+    hasConnectionRpc: typeof (connection as typeof connection & { rpc?: { handle?: unknown } }).rpc?.handle === 'function',
+    endpointCount: CODINGNS_RPC_ENDPOINTS.length,
+  })
   ctx.effect(
     () => {
       const unregisterSettings = settingsProvider === undefined
         ? undefined
         : table.register('settings', createCodingNsSettingsRpcHandler(settingsProvider))
       const handler = createCodingNsRpcHandler(table)
+      // DSH 0.1.7 的 connection.rpc.handle() 会在当前插件 Fiber 中再次读取
+      // webServer；该 Fiber 没有 webServer 注入时会直接抛错。这里使用当前
+      // Host 已明确注入的 webServer 注册插件自有前缀，避免 Host RPC 装配中断。
       const unregisterChannel = webServer.register({
         kind: 'prefix',
         path: '/codingns',
         handler: (request: IncomingMessage, response: ServerResponse) => handleChannelRequest(request, response, connection, handler),
+      })
+      console.info('codingns4dsh: host rpc channel registered', {
+        transport: 'webServer.prefix',
+        channel: '/codingns',
       })
       // 保留旧的精确 Fetch 路由，兼容早期 H5/桌面载体直接访问 `/api/codingns/*`
       // 的调用方。两条入口共享同一个 handler，不复制任何业务逻辑。
@@ -53,10 +69,16 @@ export function registerCodingNsRpc(ctx: Context, table: CodingNsRpcTable, setti
         requestBody: 'buffered',
         fetch: async (request) => handleFetchRpc(request, endpoint, handler),
       }))
+      console.info('codingns4dsh: host rpc fetch routes registered', {
+        prefix: '/api/codingns/',
+        count: disposeFetch.length,
+        endpoints: CODINGNS_RPC_ENDPOINTS,
+      })
       return async (): Promise<void> => {
         for (const dispose of disposeFetch.reverse()) await dispose()
-        unregisterChannel()
+        await unregisterChannel()
         unregisterSettings?.()
+        console.info('codingns4dsh: host rpc channel disposed')
       }
     },
     'codingns4dsh: Host RPC',
@@ -172,7 +194,7 @@ export function createCodingNsSettingsRpcHandler(provider: SettingsProvider): Co
     if (action === 'set') {
       if (!provider.writable) throw new CodingNsRpcError('CODINGNS_SETTINGS_READ_ONLY', 'Host 设置提供器当前只读')
       const input = parseSettingsMutation(payload)
-      await provider.mutate(CODINGNS_SETTINGS_NAMESPACE, input.ops, input.expectedRevision)
+      await provider.mutate(resolveCodingNsSettingsNamespace(provider), input.ops, input.expectedRevision)
       return readCodingNsSettings(provider)
     }
     throw new CodingNsRpcError('CODINGNS_RPC_NOT_FOUND', `未知 Codingns4DSH RPC: settings/${action}`)
@@ -180,13 +202,23 @@ export function createCodingNsSettingsRpcHandler(provider: SettingsProvider): Co
 }
 
 function readCodingNsSettings(provider: SettingsProvider): { value: CodingNsSettings; revision: number } {
-  const descriptor = provider.describe({ redactSecrets: true }).find((item) => item.ns === CODINGNS_SETTINGS_NAMESPACE)
+  const descriptor = findCodingNsSettingsDescriptor(provider)
   if (descriptor === undefined) throw new CodingNsRpcError('CODINGNS_SETTINGS_UNAVAILABLE', 'Codingns4DSH 设置尚未注册')
-  const value = provider.get(CODINGNS_SETTINGS_NAMESPACE) as CodingNsSettings
+  const value = typeof provider.get === 'function'
+    ? provider.get(CODINGNS_SETTINGS_NAMESPACE) as CodingNsSettings
+    : descriptor.value as CodingNsSettings
   // cliSessions 是 Host-only 索引，包含 providerSessionId/rawStoreRef，不能通过设置 RPC
   // 暴露给浏览器。外部会话列表必须走 cli/session/list，由 Host 按需返回摘要。
   const { cliSessions: _cliSessions, ...clientValue } = value
   return { value: clientValue, revision: descriptor.revision }
+}
+
+function findCodingNsSettingsDescriptor(provider: Pick<SettingsProvider, 'describe'>) {
+  return provider.describe({ redactSecrets: true }).find((item) => item.ns === CODINGNS_SETTINGS_NAMESPACE || item.ns === 'codingns4dsh')
+}
+
+function resolveCodingNsSettingsNamespace(provider: Pick<SettingsProvider, 'describe'>): string {
+  return findCodingNsSettingsDescriptor(provider)?.ns ?? CODINGNS_SETTINGS_NAMESPACE
 }
 
 function parseSettingsMutation(value: unknown): { ops: SettingsPathOp[]; expectedRevision?: number } {
@@ -233,6 +265,11 @@ async function handleFetchRpc(
   endpoint: string,
   handler: ConnectionRpcHandler,
 ): Promise<Response> {
+  console.info('codingns4dsh: host fetch rpc request', {
+    endpoint,
+    method: request.method,
+    path: new URL(request.url).pathname,
+  })
   let body: unknown
   try {
     body = await request.json()
@@ -246,6 +283,7 @@ async function handleFetchRpc(
     return new Response('invalid RPC envelope', { status: 400 })
   }
   const result = await handler(endpoint, envelope.payload, request.signal)
+  console.info('codingns4dsh: host fetch rpc response', { endpoint, ok: result.ok })
   return Response.json({ type: 'server-response', rpcId: envelope.rpcId, result })
 }
 

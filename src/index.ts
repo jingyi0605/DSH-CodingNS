@@ -7,7 +7,6 @@ export const name = 'codingns4dsh'
 export { CodingNsConfigSchema as Config } from './host/settings.js'
 /** Host Cordis 入口。 */
 export const apply = hostApply
-export default hostApply
 export { createCodingNsRpcHandler, createCodingNsSettingsRpcHandler, registerCodingNsRpc } from './host/rpc.js'
 export {
   CodingNsRpcError,

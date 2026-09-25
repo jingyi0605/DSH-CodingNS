@@ -22,6 +22,25 @@ test('0.1.7 Client ConfigForm 缺失时只禁用设置能力', async () => {
   assert.equal(await store.set('controlBaseUrl', 'https://example.test'), false)
 })
 
+test('0.1.7 Client ConfigForm 内容未变化时不重复通知', async () => {
+  const value = { controlBaseUrl: 'https://example.test', modules: {}, cliSessions: [] }
+  let notify: (() => void) | undefined
+  const form = {
+    getSnapshot: () => ({ value: { ...value, modules: { ...value.modules }, cliSessions: [...value.cliSessions] }, revision: 1, writable: true as const, status: 'ready' as const }),
+    subscribe: (listener: () => void) => { notify = listener; return () => undefined },
+    mutate: async () => undefined,
+    set: async () => undefined,
+    unset: async () => undefined,
+  }
+  const store = createConfigFormSettingsStore({ get: () => form }, 'codingns')
+  let calls = 0
+  store.subscribe(() => { calls += 1 })
+
+  notify?.()
+  assert.equal(calls, 0)
+  assert.deepEqual(store.getSnapshot().value, { controlBaseUrl: 'https://example.test', modules: {} })
+})
+
 test('统一 RPC dispatch 只使用宿主传入的 peer context', async () => {
   const table = new CodingNsRpcTable()
   let received: unknown
