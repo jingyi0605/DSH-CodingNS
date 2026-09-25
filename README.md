@@ -10,7 +10,7 @@
 
 **简体中文** · [English](README.en.md)
 
-**当前版本 `codingns4dsh@0.1.1`** · DSH **`>=0.1.5-rc.3 <0.1.8-0`**（已验证 `0.1.6-alpha.2`）· Node **`>= 22.19`** · macOS / Linux / Windows
+**当前版本 `codingns4dsh@0.1.1`** · DSH **`>=0.1.5-rc.3 <0.1.8-0`**（已验证 `0.1.5-rc.3`、`0.1.6-alpha.2`、`0.1.7-rc.2`）· Node **`>= 22.19`** · macOS / Linux / Windows
 
 **[GitHub](https://github.com/jingyi0605/Codingns4DSH)** · **[npm](https://www.npmjs.com/package/codingns4dsh)** · **QQ 群 1092985965**
 
