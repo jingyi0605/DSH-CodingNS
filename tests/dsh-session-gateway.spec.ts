@@ -32,6 +32,47 @@ test('DSH Session 完成 hello/ready 协商并进入 ready', async () => {
   host.close(); client.close()
 })
 
+test('DSH Session 允许兼容的 Host 与 Client 使用不同应用版本握手', async () => {
+  const [left, right] = carrierPair()
+  const host = new DshSession({
+    carrier: left.carrier,
+    role: 'host',
+    generation: 'g1',
+    hostScope: { hostId: 'h1', kind: 'local' },
+    dshVersion: '0.1.7-rc.2',
+    capabilities: ['rpc'],
+  })
+  const client = new DshSession({
+    carrier: right.carrier,
+    role: 'client',
+    generation: 'g1',
+    hostScope: { hostId: 'h1', kind: 'local' },
+    dshVersion: '0.1.6-alpha.2',
+    capabilities: ['rpc'],
+  })
+
+  host.start()
+  client.start()
+  await client.waitReady()
+  assert.equal(host.ready, true)
+  client.close()
+  host.close()
+})
+
+test('DSH Session 拒绝超出兼容范围的对端版本', async () => {
+  const [left, right] = carrierPair()
+  const host = new DshSession({ carrier: left.carrier, role: 'host', generation: 'g1', hostScope: { hostId: 'h1', kind: 'local' }, dshVersion: '0.1.6-alpha.2' })
+  const client = new DshSession({ carrier: right.carrier, role: 'client', generation: 'g1', hostScope: { hostId: 'h1', kind: 'local' }, dshVersion: '0.1.8' })
+  host.start()
+  client.start()
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(host.state, 'degraded')
+  assert.equal(client.ready, false)
+  assert.equal(host.ready, false)
+  client.close()
+  host.close()
+})
+
 test('Host Session 首个 hello 采用 Client generation，重连 generation 不再被误判过期', async () => {
   const [left, right] = carrierPair()
   const host = new DshSession({ carrier: left.carrier, role: 'host', generation: '1', hostScope: { hostId: 'h1', kind: 'local' }, acceptInitialGeneration: true })

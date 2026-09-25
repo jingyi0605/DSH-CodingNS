@@ -6,7 +6,7 @@ import {
   type DshEnvelope,
   type DshHostScope,
 } from './dsh-envelope.js'
-import { DSH_VERSION } from '../shared/contracts/version.js'
+import { DSH_VERSION, isDshVersionCompatible } from '../shared/contracts/version.js'
 import { createDshTransportDebugLogger, type DshTransportDebugLogger } from './debug.js'
 
 export type DshSessionRole = 'client' | 'host'
@@ -158,7 +158,7 @@ export class DshSession {
       }
       const protocol = envelope.meta.protocol
       const dshVersion = envelope.meta.dshVersion
-      if (protocol !== (this.options.protocol ?? DSH_ENVELOPE_PROTOCOL) || dshVersion !== (this.options.dshVersion ?? DSH_VERSION)) {
+      if (protocol !== (this.options.protocol ?? DSH_ENVELOPE_PROTOCOL) || typeof dshVersion !== 'string' || !isDshVersionCompatible(dshVersion)) {
         this.fail(new Error('PROTOCOL_VERSION_UNSUPPORTED'))
         return
       }
@@ -179,7 +179,7 @@ export class DshSession {
       }
       const protocol = envelope.meta.protocol
       const dshVersion = envelope.meta.dshVersion
-      if (protocol !== (this.options.protocol ?? DSH_ENVELOPE_PROTOCOL) || dshVersion !== (this.options.dshVersion ?? DSH_VERSION)) {
+      if (protocol !== (this.options.protocol ?? DSH_ENVELOPE_PROTOCOL) || typeof dshVersion !== 'string' || !isDshVersionCompatible(dshVersion)) {
         this.fail(new Error('PROTOCOL_VERSION_UNSUPPORTED'))
         return
       }
