@@ -151,3 +151,18 @@ test('重复并发 start 不会重复创建同一模块', async () => {
   assert.equal(starts, 1)
   assert.equal(registry.getState('once'), 'enabled')
 })
+
+test('重复并发 reconcile 按完整调用顺序执行，不会交叉启停模块', async () => {
+  const events: string[] = []
+  const registry = new FeatureRegistry({})
+  registry.register(moduleOf('slow', [], {
+    start: async () => {
+      events.push('start')
+      await Promise.resolve()
+    },
+  }))
+
+  await Promise.all([registry.reconcile(['slow']), registry.reconcile([])])
+  assert.deepEqual(events, ['start'])
+  assert.equal(registry.getState('slow'), 'disabled')
+})

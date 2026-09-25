@@ -102,6 +102,7 @@ interface FeatureRecord<S, M extends FeatureModule<S>> {
 export class FeatureRegistry<S = unknown, M extends FeatureModule<S> = FeatureModule<S>> {
   private readonly records = new Map<string, FeatureRecord<S, M>>()
   private readonly operations = new Map<string, Promise<void>>()
+  private reconcileOperation: Promise<void> = Promise.resolve()
 
   /** @param services - 每个模块在 start 时通过 context.services 取用的服务集合。 */
   constructor(private readonly services: S, private readonly capabilityProfile?: DshCapabilityProfile) {}
@@ -120,6 +121,12 @@ export class FeatureRegistry<S = unknown, M extends FeatureModule<S> = FeatureMo
       resources,
       context: { descriptor: module.descriptor, resources, services: this.services },
       capabilities: [],
+    })
+    traceFeature('registered', {
+      feature: name,
+      runtime: module.descriptor.runtime,
+      dependencies: module.descriptor.dependencies,
+      enabledByDefault: module.descriptor.enabledByDefault,
     })
   }
 
@@ -183,6 +190,7 @@ export class FeatureRegistry<S = unknown, M extends FeatureModule<S> = FeatureMo
       visited.add(name)
     }
     for (const name of this.records.keys()) visit(name)
+    traceFeature('validated', { features: [...this.records.keys()] })
   }
 
   async start(name: string): Promise<void> {
@@ -200,8 +208,22 @@ export class FeatureRegistry<S = unknown, M extends FeatureModule<S> = FeatureMo
    * 并发调用按模块串行队列排队，最终状态由最后一次调用决定。
    */
   async reconcile(enabledNames: readonly string[]): Promise<void> {
+    const operation = this.reconcileOperation.then(
+      () => this.reconcileInternal(enabledNames),
+      () => this.reconcileInternal(enabledNames),
+    )
+    this.reconcileOperation = operation.catch(() => undefined)
+    return operation
+  }
+
+  private async reconcileInternal(enabledNames: readonly string[]): Promise<void> {
     this.validate()
     const desired = this.resolveDesired(enabledNames)
+    traceFeature('reconcile', {
+      requested: enabledNames,
+      desired: [...desired],
+      states: this.list().map((item) => ({ name: item.name, state: item.state, reason: item.reason })),
+    })
     for (const name of this.records.keys()) {
       if (desired.has(name)) await this.start(name)
     }
@@ -288,6 +310,7 @@ export class FeatureRegistry<S = unknown, M extends FeatureModule<S> = FeatureMo
   private async startInternal(name: string, starting: Set<string>): Promise<void> {
     const record = this.getRecord(name)
     if (record.state === 'enabled') return
+    traceFeature('start.begin', { feature: name, state: record.state, dependencies: record.module.descriptor.dependencies })
     if (record.state === 'enabling') {
       throw new FeatureRegistryError('FEATURE_STATE_INVALID', `Feature is already enabling: ${name}`, name)
     }
@@ -304,6 +327,7 @@ export class FeatureRegistry<S = unknown, M extends FeatureModule<S> = FeatureMo
       if (dependencyRecord.state !== 'enabled') {
         record.state = 'disabled'
         record.reason = `依赖模块 ${dependency} 未启用`
+        traceFeature('start.blocked', { feature: name, dependency, dependencyState: dependencyRecord.state })
         return
       }
     }
@@ -317,21 +341,31 @@ export class FeatureRegistry<S = unknown, M extends FeatureModule<S> = FeatureMo
     record.reason = null
     const capabilityCheck = this.checkCapabilities(record)
     record.capabilities = capabilityCheck.diagnostics
+    traceFeature('start.capabilities', {
+      feature: name,
+      action: capabilityCheck.action,
+      reason: capabilityCheck.reason ?? null,
+      diagnostics: capabilityCheck.diagnostics,
+    })
     if (capabilityCheck.action === 'disable') {
       record.state = 'disabled'
       record.reason = capabilityCheck.reason ?? null
+      traceFeature('start.disabled', { feature: name, reason: record.reason })
       return
     }
     if (capabilityCheck.action === 'error') {
       record.state = 'failed'
       record.reason = capabilityCheck.reason ?? '能力不可用'
+      traceFeature('start.failed', { feature: name, reason: record.reason })
       throw new FeatureRegistryError('FEATURE_CAPABILITY_MISSING', record.reason, name)
     }
     record.context = { ...record.context, capabilityDiagnostics: record.capabilities }
     try {
+      traceFeature('start.module', { feature: name })
       const returned = await record.module.start(record.context)
       addReturnedDisposer(record.resources, returned)
       record.state = 'enabled'
+      traceFeature('start.enabled', { feature: name })
     } catch (error) {
       try {
         await record.resources.dispose()
@@ -340,6 +374,7 @@ export class FeatureRegistry<S = unknown, M extends FeatureModule<S> = FeatureMo
       }
       record.state = 'failed'
       record.reason = errorMessage(error)
+      traceFeature('start.failed', { feature: name, reason: record.reason, error: serializeError(error) })
       throw new FeatureRegistryError('FEATURE_START_FAILED', `Failed to start feature ${name}`, name, { cause: error })
     }
   }
@@ -393,6 +428,17 @@ export class FeatureRegistry<S = unknown, M extends FeatureModule<S> = FeatureMo
     void next.then(cleanup, cleanup)
     return next
   }
+}
+
+function traceFeature(event: string, details: Record<string, unknown>): void {
+  console.info(`codingns4dsh: feature.${event}`, details)
+}
+
+function serializeError(error: unknown): { name: string; message: string; stack?: string } {
+  if (error instanceof Error) {
+    return { name: error.name, message: error.message, ...(error.stack === undefined ? {} : { stack: error.stack }) }
+  }
+  return { name: typeof error, message: String(error) }
 }
 
 function validateDescriptor(descriptor: FeatureDescriptor | undefined): asserts descriptor is FeatureDescriptor {
