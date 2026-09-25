@@ -38,7 +38,7 @@ export function createTerminalStatusFeature(options: TerminalStatusFeatureOption
     start(context) {
       context.resources.add(context.services.rpc.register('terminal', (action) => {
         if (action !== 'status') {
-          throw new CodingNsRpcError('CODINGNS_RPC_NOT_FOUND', `未知 CodingNS RPC: terminal/${action}`)
+          throw new CodingNsRpcError('CODINGNS_RPC_NOT_FOUND', `未知 Codingns4DSH RPC: terminal/${action}`)
         }
         const shells = detectShells()
         const requested = context.services.settings?.get().terminalEnhancement.defaultProfile ?? 'system'

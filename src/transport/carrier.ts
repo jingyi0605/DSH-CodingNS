@@ -161,7 +161,7 @@ export function createDataChannelCarrier(channel: DataChannelLike, options: Data
   }
   const sendPhysical = async (data: Uint8Array): Promise<void> => {
     await waitOpen()
-    if (state !== 'open') throw new Error('CodingNS DataChannel 尚未 ready')
+    if (state !== 'open') throw new Error('Codingns4DSH DataChannel 尚未 ready')
     await waitBackpressure()
     channel.send(data)
     logger.log('carrier.send', { bytes: data.byteLength, bufferedAmount: channel.bufferedAmount ?? 0 })

@@ -19,7 +19,7 @@ const identity: HostDtlsIdentityMaterial = {
 }
 
 test('Host DTLS identity 文件存储可写入并恢复完整材料', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'dsh-codingns-'))
+  const directory = await mkdtemp(join(tmpdir(), 'codingns4dsh-'))
   const path = join(directory, 'identity.json')
   const store = new FileHostDtlsIdentityStore(path)
   assert.equal(await store.read(), null)

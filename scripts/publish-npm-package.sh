@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-# 本脚本只负责当前仓库根目录下的 dsh-codingns 包。
+# 本脚本只负责当前仓库根目录下的 codingns4dsh 包。
 # 发布前会重新构建并执行检查，避免把过期的 data/build 产物发布出去。
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmjs.org/}"
@@ -148,7 +148,7 @@ configure_npm_auth() {
     return 0
   fi
 
-  npm_auth_config_file="$(mktemp "${TMPDIR:-/tmp}/dsh-codingns-npmrc.XXXXXX")"
+  npm_auth_config_file="$(mktemp "${TMPDIR:-/tmp}/codingns4dsh-npmrc.XXXXXX")"
   chmod 600 "$npm_auth_config_file"
   {
     echo "registry=$NPM_REGISTRY"

@@ -53,7 +53,7 @@ export class RemoteDshWebContext {
   async open(signal?: AbortSignal): Promise<void> {
     this.ensureOpen()
     window.addEventListener('message', this.onMessageBound)
-    ;(window as Window & { __DSH_CODINGNS_REMOTE_TRANSPORT__?: DshCodingNsTransport }).__DSH_CODINGNS_REMOTE_TRANSPORT__ = this.options.transport
+    ;(window as Window & { __CODINGNS4DSH_REMOTE_TRANSPORT__?: DshCodingNsTransport }).__CODINGNS4DSH_REMOTE_TRANSPORT__ = this.options.transport
     const session = await this.options.transport.webRequest<{ sessionId: string; dshVersion: string }>('web.session.open', {
       ...(this.options.workspaceId ? { workspaceId: this.options.workspaceId } : {}),
       ...(this.options.sessionId ? { sessionId: this.options.sessionId } : {}),
@@ -98,8 +98,8 @@ export class RemoteDshWebContext {
     this.objectUrls.clear()
     this.iframeValue?.remove()
     this.iframeValue = undefined
-    const transportWindow = window as Window & { __DSH_CODINGNS_REMOTE_TRANSPORT__?: DshCodingNsTransport }
-    if (transportWindow.__DSH_CODINGNS_REMOTE_TRANSPORT__ === this.options.transport) delete transportWindow.__DSH_CODINGNS_REMOTE_TRANSPORT__
+    const transportWindow = window as Window & { __CODINGNS4DSH_REMOTE_TRANSPORT__?: DshCodingNsTransport }
+    if (transportWindow.__CODINGNS4DSH_REMOTE_TRANSPORT__ === this.options.transport) delete transportWindow.__CODINGNS4DSH_REMOTE_TRANSPORT__
     this.sessionIdValue = undefined
   }
 
@@ -352,11 +352,11 @@ export class RemoteDshWebContext {
 
 function createBridgeScript(): string {
   return `(() => {
-    // 远程 DSH Web 已经运行在外层 DSH-CodingNS Tunnel 内。
-    // 内嵌的 dsh-codingns Client 仍需加载其插件代码和界面，但不能再次启动
+    // 远程 DSH Web 已经运行在外层 Codingns4DSH Tunnel 内。
+    // 内嵌的 codingns4dsh Client 仍需加载其插件代码和界面，但不能再次启动
     // 自己的 Relay/WebRTC，否则会把信令 WebSocket 当成本地 DSH Web 路径转发，
     // 形成递归连接并持续触发 /signaling/signal 失败。
-    globalThis.__DSH_CODINGNS_REMOTE_WEB_CONTEXT__ = true;
+    globalThis.__CODINGNS4DSH_REMOTE_WEB_CONTEXT__ = true;
     const bridgeDebugEnabled = (() => {
       try {
         const query = new URL(parent.location.href).searchParams.get('dshDebug');
@@ -366,7 +366,7 @@ function createBridgeScript(): string {
     const bridgeLog = (event, fields = {}) => {
       if (!bridgeDebugEnabled) return;
       const payload = { at: new Date().toISOString(), side: 'h5', component: 'remote-web-bridge', event, ...fields };
-      console.info('[dsh-codingns:tunnel]', payload);
+      console.info('[codingns4dsh:tunnel]', payload);
       parent.postMessage({ kind: 'dsh-web-debug', event, fields: payload }, '*');
     };
     const pending = new Map();
@@ -415,7 +415,7 @@ function createBridgeScript(): string {
         if (beforeNode) nativeInsertBefore.call(parentNode, node, beforeNode);
         else nativeAppendChild.call(parentNode, node);
       }).catch((error) => {
-        console.error('[dsh-codingns] remote resource load failed', error);
+        console.error('[codingns4dsh] remote resource load failed', error);
         try {
           if (typeof onerror === 'function') onerror.call(node, error);
           else node.dispatchEvent(new Event('error'));
@@ -804,12 +804,12 @@ function createBridgeScript(): string {
       })();
     };
     const parentTransport = (() => {
-      try { return parent.__DSH_CODINGNS_REMOTE_TRANSPORT__; } catch { return undefined; }
+      try { return parent.__CODINGNS4DSH_REMOTE_TRANSPORT__; } catch { return undefined; }
     })();
     globalThis.__DSH_TRANSPORT__ = {
       fetch: window.fetch.bind(window),
       openStream: openRemoteStream,
-      // 该 iframe 的所有 DSH 请求都经由已认证的 CodingNS 隧道回到选定 Host。
+      // 该 iframe 的所有 DSH 请求都经由已认证的 Codingns4DSH 隧道回到选定 Host。
       // 必须声明 Host 所有权，否则 ui-settings 会把远程页面降级为 memory
       // 模式，原生“模型”页无法读取 settings provider。
       ownsHost: true,
@@ -818,7 +818,7 @@ function createBridgeScript(): string {
       reconnect: parentTransport?.reconnect?.bind(parentTransport),
       close: parentTransport?.close?.bind(parentTransport),
     };
-    globalThis.__DSH_CODINGNS_DEBUG__ = (event, fields = {}) => {
+    globalThis.__CODINGNS4DSH_DEBUG__ = (event, fields = {}) => {
       bridgeLog('client.' + String(event), fields);
     };
     const NativeEventSource = globalThis.EventSource;

@@ -1,5 +1,5 @@
 /**
- * CodingNS 控制面认证契约。
+ * Codingns4DSH 控制面认证契约。
  *
  * 这些 DTO 与 codingns-proxy/packages/shared-contracts 保持字段兼容。
  * 阶段 2 只定义数据边界，不在插件中发起真实网络请求。

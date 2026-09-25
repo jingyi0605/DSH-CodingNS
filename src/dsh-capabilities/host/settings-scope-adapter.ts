@@ -6,7 +6,7 @@ import type {
   CodingNsSettingsStore,
 } from '../settings-store.js'
 
-/** 旧版 Host SettingsScope 到 CodingNS 内部设置接口的适配器。 */
+/** 旧版 Host SettingsScope 到 Codingns4DSH 内部设置接口的适配器。 */
 export function createLegacyHostSettingsStore<T>(scope: SettingsScope<T>): CodingNsSettingsStore<T> {
   const listeners = new Set<() => void>()
   const unsubscribe = scope.watch(() => {

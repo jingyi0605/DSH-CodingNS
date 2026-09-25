@@ -13,7 +13,7 @@ const runtimeVersionSource = join(dirname(fileURLToPath(import.meta.url)), '../s
 test('Client 入口以 DSH Loader factory 格式构建', async () => {
   const source = await readFile(clientBundle, 'utf8')
   assert.match(source, /window\.__ModuleLoader__\.load/u)
-  assert.match(source, /id:\s*["']dsh-codingns["']/u)
+  assert.match(source, /id:\s*["']codingns4dsh["']/u)
   assert.match(source, /factory:\s*\(require\)/u)
   assert.doesNotMatch(source, /require\(["']\.\/[^"']+\.(?:cjs|js)["']\)/u, 'DSH Client 不得依赖 Loader 无法解析的相对分块')
 })
@@ -55,7 +55,7 @@ test('Client 构建产物包含模块卡片、设置面板和 Host RPC 调用', 
   assert.equal(source.includes('每个功能模块独立配置，避免多个表单同时横向挤压。'), false)
   for (const marker of [
     'type: "password"', 'auth/login', 'auth/logout',
-    'settings.section', 'id: "codingns"', 'label: "CodingNS"', 'CodingNS 功能模块',
+    'settings.section', 'id: "codingns"', 'label: "Codingns4DSH"', 'Codingns4DSH 功能模块',
     'details', 'summary', 'role: "switch"', 'aria-label', 'aria-disabled', 'pointerEvents',
     'disabled: disabled || busy', 'aria-modal', '添加中…', '添加中转服务器', 'https://channel.codingns.com:1443',
     '局域网访问', '自动补齐 crypto.randomUUID', '中转访问服务', '绑定 Host',
@@ -86,7 +86,7 @@ test('设置页由注册表驱动：遍历模块清单并同步启停', async ()
     'settingsPanel',
     'alwaysEnabled',
     'reconcile',
-    'dsh-codingns: 功能模块启停同步',
+    'codingns4dsh: 功能模块启停同步',
   ]) {
     assert.equal(source.includes(marker), true, `Client 产物缺少 ${marker}`)
   }
@@ -130,10 +130,10 @@ test('Client 构建产物提供自有 webTerminals 与 Sidebar 终端', async ()
   const source = await readFile(clientBundle, 'utf8')
   for (const marker of [
     'super(ctx, "webTerminals")',
-    'dsh-codingns/terminal',
+    'codingns4dsh/terminal',
     'sidebar.right.pane.tab',
     'sidebar.right.tab.guide.entry',
-    'CodingNS 自有的浏览器终端服务',
+    'Codingns4DSH 自有的浏览器终端服务',
   ]) {
     assert.equal(source.includes(marker), true, `Client 产物缺少自有终端标记 ${marker}`)
   }

@@ -12,7 +12,7 @@ import type { CodingNsSettings } from '../../shared/contracts/config.js'
 /**
  * 可替换的会话持久化后端。
  *
- * 默认实现写入 DSH 的 CodingNS 设置文档；当 DSH 暴露原生 SessionStore
+ * 默认实现写入 DSH 的 Codingns4DSH 设置文档；当 DSH 暴露原生 SessionStore
  * 扩展点后，只需替换这个后端，不需要改 Registry 或驱动。
  */
 export interface CodingNsCliSessionPersistence {

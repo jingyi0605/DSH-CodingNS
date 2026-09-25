@@ -201,7 +201,7 @@ function shellQuote(value: string): string {
 
 export function tmuxSessionName(runtimeSessionKey: string): string {
   const digest = createHash('sha256').update(runtimeSessionKey).digest('hex').slice(0, 32)
-  return `dsh-codingns-${digest}`
+  return `codingns4dsh-${digest}`
 }
 
 function runCommand(command: string, args: readonly string[]): TmuxCommandResult {

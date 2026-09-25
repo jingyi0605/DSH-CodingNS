@@ -105,7 +105,7 @@ export class CodingNsSettingsBridge implements CodingNsSettingsStore<CodingNsSet
       result = await this.rpc.call(CODINGNS_RPC_CHANNEL, endpoint, payload)
     } catch (error) {
       // DSH 原生连接通常把自定义 RPC 映射到 /api；保留逻辑通道兼容
-      // CodingNS Transport，同时在普通 Web Host 上回退到实际 Fetch 路由。
+      // Codingns4DSH Transport，同时在普通 Web Host 上回退到实际 Fetch 路由。
       const message = error instanceof Error ? error.message : String(error)
       if (!/HTTP (?:404|405)\b/u.test(message)) throw error
       result = await this.rpc.call('/api', `codingns/${endpoint}`, payload)

@@ -27,7 +27,7 @@ export function assertInjectedDshVersion(ctx?: Context): string {
     }
     throw new CodingNsDshError(
       CODINGNS_DSH_ERROR_CODES.DSH_VERSION_UNSUPPORTED,
-      '无法读取当前 DSH 版本；为避免 Client API 不兼容，已拒绝启用 dsh-codingns',
+      '无法读取当前 DSH 版本；为避免 Client API 不兼容，已拒绝启用 codingns4dsh',
     )
   }
   assertSupportedDshVersion(value)

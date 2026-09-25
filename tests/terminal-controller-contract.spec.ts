@@ -149,7 +149,7 @@ test('会话绑定设置覆盖 Workspace Registry 并为每个 session 隔离终
 })
 
 test('禁用强化时工厂仍使用插件 controller 与进程内 PTY', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'dsh-codingns-controller-'))
+  const directory = await mkdtemp(join(tmpdir(), 'codingns4dsh-controller-'))
   try {
     const result = await createTerminalController(new Context(), {
       enhancedEnabled: false,

@@ -73,7 +73,7 @@ export { registerSubscriptionSlot, registerCommandCodeSubscriptionSlot, CommandC
 export const inject = ['slots', 'connection', 'remote', 'remote.workspace', 'remote.session', 'remote.terminal', 'sidebarRight', 'sidebarRightTabs', 'theme', 'locale', 'uiConversation'] as const
 
 /**
- * 把 CodingNS 设置页挂载到 DSH 设置左侧导航，并让模块开关驱动启停。
+ * 把 Codingns4DSH 设置页挂载到 DSH 设置左侧导航，并让模块开关驱动启停。
  *
  * 设置页与启停同步共享同一个注册表实例，所以界面上的模块清单就是运行时实际
  * 管理的模块清单，两者不会漂移。
@@ -83,7 +83,7 @@ export function apply(ctx?: Context): void {
   const dshVersion = assertInjectedDshVersion(ctx)
   // 版本门禁通过后才修改浏览器全局，避免不兼容 Client 留下半初始化状态。
   ensureCryptoRandomUUID()
-  ctx.effect(() => registerCodingNsLocale(ctx), 'dsh-codingns: Client 词典')
+  ctx.effect(() => registerCodingNsLocale(ctx), 'codingns4dsh: Client 词典')
 
   ctx.inject(['slots', 'connection', 'remote', 'remote.workspace', 'remote.session', 'remote.terminal', 'sidebarRight', 'sidebarRightTabs', 'theme', 'locale', 'uiConversation'], (settingsCtx) => {
     // Host 与 Client 共用同一个 cordis Context 类型，而 DSH 的 Host 侧声明会把
@@ -124,14 +124,14 @@ export function apply(ctx?: Context): void {
         void registry
           .reconcile(enabledFeatureNames(registry.descriptors(), snapshot.value, restartStates, dshVersion))
           .catch((error: unknown) => {
-            console.error('dsh-codingns: 功能模块状态同步失败', error)
+            console.error('codingns4dsh: 功能模块状态同步失败', error)
           })
       }
       sync()
       const loading = settings.load?.()
       if (loading !== undefined) {
         void loading.catch((error: unknown) => {
-          console.error('dsh-codingns: 远程设置读取失败', error)
+          console.error('codingns4dsh: 远程设置读取失败', error)
         })
       }
       const unsubscribe = settings.subscribe(sync)
@@ -142,13 +142,13 @@ export function apply(ctx?: Context): void {
         void webTerminals.dispose()
         void settings.dispose?.()
       }
-    }, 'dsh-codingns: 功能模块启停同步')
+    }, 'codingns4dsh: 功能模块启停同步')
 
     settingsCtx.slots.inject('settings.section', () => settingsCtx.slots.register({
       name: 'settings.section',
       id: 'codingns',
       order: 30,
-      label: 'CodingNS',
+      label: 'Codingns4DSH',
       inject: () => ({ settings, registry, services, restartStates }),
     }, CodingNsSettingsSection))
   })
@@ -169,7 +169,7 @@ function createClientSettingsStore(ctx: Context, rpc: CodingNsRpcClient): Coding
 
 function findConfigForm(forms: DshClientConfigForms | undefined): DshConfigForm<CodingNsSettings> | undefined {
   if (forms === undefined) return undefined
-  for (const id of ['dsh-codingns', CODINGNS_SETTINGS_NAMESPACE]) {
+  for (const id of ['codingns4dsh', CODINGNS_SETTINGS_NAMESPACE]) {
     try {
       const form = forms.get<CodingNsSettings>(id)
       if (form !== undefined) return form

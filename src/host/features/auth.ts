@@ -43,7 +43,7 @@ export function createAuthFeature(): FeatureModule<CodingNsHostServices> {
       runtime: 'host',
     },
     start(context) {
-      const stateDirectory = process.env.DSH_CODINGNS_STATE_DIR?.trim() || join(homedir(), '.config', 'dsh-codingns')
+      const stateDirectory = process.env.CODINGNS4DSH_STATE_DIR?.trim() || join(homedir(), '.config', 'codingns4dsh')
       const credentials = new FileCodingNsCredentialStore(join(stateDirectory, 'codingns-credentials.json'))
       const dshCredentials = new FileDshDeviceCredentialStore(join(stateDirectory, 'device-credential.json'))
       const loginProtectionStore = new FileLanAccessDshLoginStore(join(stateDirectory, 'lan-access-login.json'))
@@ -68,7 +68,7 @@ export function createAuthFeature(): FeatureModule<CodingNsHostServices> {
       }
 
       const requireSession = (): CodingNsAuthSession => {
-        if (!session) throw new CodingNsRpcError('CODINGNS_RPC_UNAUTHENTICATED', 'CodingNS 尚未登录')
+        if (!session) throw new CodingNsRpcError('CODINGNS_RPC_UNAUTHENTICATED', 'Codingns4DSH 尚未登录')
         return session
       }
 
@@ -106,8 +106,8 @@ export function createAuthFeature(): FeatureModule<CodingNsHostServices> {
             }
             dshRuntime = runtime
           } catch (error) {
-            // DSH 设备服务不可用时不应破坏已有 CodingNS 登录；下次登录/显式 start 会重试。
-            console.error('dsh-codingns: DSH Host runtime 启动失败', error)
+            // DSH 设备服务不可用时不应破坏已有 Codingns4DSH 登录；下次登录/显式 start 会重试。
+            console.error('codingns4dsh: DSH Host runtime 启动失败', error)
           } finally {
             dshStartPromise = null
           }
@@ -126,7 +126,7 @@ export function createAuthFeature(): FeatureModule<CodingNsHostServices> {
         },
         logout: async () => {
           // DSH 设备注册凭据独立保存在 device-credential.json；注销中继站
-          // 登录只停止当前运行时并清理 CodingNS refresh token，不得清除设备注册。
+          // 登录只停止当前运行时并清理 Codingns4DSH refresh token，不得清除设备注册。
           await dshRuntime?.stop()
           dshRuntime = null
           if (session) await session.logout()
@@ -151,7 +151,7 @@ export function createAuthFeature(): FeatureModule<CodingNsHostServices> {
           const input = isRecord(payload) && typeof payload.dshDeviceId === 'string' ? payload.dshDeviceId.trim() : ''
           if (!input || input !== dshRuntime.credential.deviceId) throw new CodingNsRpcError('DSH_DEVICE_NOT_FOUND', '请求的 DSH 设备不是当前 Host')
           const accessToken = target.getAccessToken()
-          if (!accessToken) throw new CodingNsRpcError('CODINGNS_RPC_UNAUTHENTICATED', 'CodingNS 尚未登录')
+          if (!accessToken) throw new CodingNsRpcError('CODINGNS_RPC_UNAUTHENTICATED', 'Codingns4DSH 尚未登录')
           const request: DshRelayTicketRequest = {
             dshDeviceId: dshRuntime.credential.deviceId,
             deviceCredential: dshRuntime.credential.deviceCredential,
@@ -166,7 +166,7 @@ export function createAuthFeature(): FeatureModule<CodingNsHostServices> {
       context.resources.add(context.services.rpc.register('auth', (action, payload) => {
         const handler = actions[action]
         if (handler === undefined) {
-          throw new CodingNsRpcError('CODINGNS_RPC_NOT_FOUND', `未知 CodingNS RPC: auth/${action}`)
+          throw new CodingNsRpcError('CODINGNS_RPC_NOT_FOUND', `未知 Codingns4DSH RPC: auth/${action}`)
         }
         return handler(payload)
       }))
@@ -183,7 +183,7 @@ export function createAuthFeature(): FeatureModule<CodingNsHostServices> {
             try {
               await target.refresh()
             } catch (error) {
-              console.error('dsh-codingns: 后台刷新 CodingNS 会话失败', error)
+              console.error('codingns4dsh: 后台刷新 Codingns4DSH 会话失败', error)
             }
           }
           if (dshRuntime === null) await startDsh(target)
@@ -205,7 +205,7 @@ export function createAuthFeature(): FeatureModule<CodingNsHostServices> {
           await target.restore()
           await startDsh(target)
         } catch (error) {
-          console.error('dsh-codingns: 恢复 DSH Host 会话失败', error)
+          console.error('codingns4dsh: 恢复 DSH Host 会话失败', error)
         }
       })()
 

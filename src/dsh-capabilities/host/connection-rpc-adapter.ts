@@ -22,7 +22,7 @@ export async function dispatchCodingNsRpc(
   context: CodingNsRpcContext = {},
 ): Promise<CodingNsRpcDispatchResult> {
   const target = table.resolve(endpoint)
-  if (target === null) throw new CodingNsRpcError('CODINGNS_RPC_NOT_FOUND', `未知 CodingNS RPC: ${endpoint}`)
+  if (target === null) throw new CodingNsRpcError('CODINGNS_RPC_NOT_FOUND', `未知 Codingns4DSH RPC: ${endpoint}`)
   const value = await target.handler(target.action, payload, context)
   return { ok: true, value }
 }

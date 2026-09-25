@@ -31,23 +31,23 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-const CLI_STYLE_ID = 'dsh-codingns-cli-composer-style'
+const CLI_STYLE_ID = 'codingns4dsh-cli-composer-style'
 const CIRCULAR_PROVIDER_ICON_IDS = new Set(['gemini', 'grok'])
 
 function installComposerStyles(): void {
   if (typeof document === 'undefined' || document.querySelector(`style[data-plugin-css="${CLI_STYLE_ID}"]`) !== null) return
   const style = document.createElement('style')
-  style.dataset.plugin = 'dsh-codingns'
+  style.dataset.plugin = 'codingns4dsh'
   style.dataset.pluginCss = CLI_STYLE_ID
   style.textContent = [
     'html[data-codingns-agent]:not([data-codingns-agent="dsh"]) [data-slot="conversation.input.model"],',
     'body[data-codingns-agent]:not([data-codingns-agent="dsh"]) [data-slot="conversation.input.model"]{display:none!important}',
-    '@keyframes dsh-codingns-cli-spin{to{transform:rotate(360deg)}}',
-    '.dsh-codingns-cli-spinner{animation:dsh-codingns-cli-spin .8s linear infinite}',
-    '.dsh-codingns-agent-trigger:hover:not(:disabled){background:color-mix(in srgb,currentColor 7%,transparent)}',
-    '.dsh-codingns-agent-option:hover:not(:disabled){background:color-mix(in srgb,currentColor 7%,transparent)!important}',
-    '.dsh-codingns-agent-option[data-selected="true"]{background:color-mix(in srgb,currentColor 10%,transparent)!important}',
-    '@media (prefers-reduced-motion:reduce){.dsh-codingns-cli-spinner{animation-duration:1.6s}}',
+    '@keyframes codingns4dsh-cli-spin{to{transform:rotate(360deg)}}',
+    '.codingns4dsh-cli-spinner{animation:codingns4dsh-cli-spin .8s linear infinite}',
+    '.codingns4dsh-agent-trigger:hover:not(:disabled){background:color-mix(in srgb,currentColor 7%,transparent)}',
+    '.codingns4dsh-agent-option:hover:not(:disabled){background:color-mix(in srgb,currentColor 7%,transparent)!important}',
+    '.codingns4dsh-agent-option[data-selected="true"]{background:color-mix(in srgb,currentColor 10%,transparent)!important}',
+    '@media (prefers-reduced-motion:reduce){.codingns4dsh-cli-spinner{animation-duration:1.6s}}',
   ].join('')
   document.head.appendChild(style)
 }
@@ -121,14 +121,14 @@ export function registerCliConversationSlots(slots: SlotRegistry, rpc: CodingNsR
   const t = locale.bind('codingns')
   const disposeAgent = slots.inject('conversation.input.right', () => slots.register({
     name: 'conversation.input.right',
-    id: 'dsh-codingns-agent',
+    id: 'codingns4dsh-agent',
     order: -20,
     label: t('cli.agentSelector'),
     inject: (sessionId: string) => ({ rpc, sessionId, locale }),
   }, AgentSlot))
   const disposeModel = slots.inject('conversation.input.right', () => slots.register({
     name: 'conversation.input.right',
-    id: 'dsh-codingns-model',
+    id: 'codingns4dsh-model',
     order: -10,
     label: t('cli.modelSelector'),
     inject: (sessionId: string) => ({ rpc, sessionId, locale }),
@@ -176,7 +176,7 @@ function AgentSlot(props: CliSlotProps): ReactElement {
   }
   const currentIcon = providerIconUrl(current.id)
   return createElement('div', { style: agentRootStyle },
-    createElement('button', { type: 'button', className: 'dsh-codingns-agent-trigger', disabled: locked, onClick: () => setOpen((value) => !value), 'aria-label': t('cli.currentAgent', { name: current.name, locked: locked ? t('cli.locked') : '' }), 'aria-haspopup': 'menu', 'aria-expanded': open, style: { ...agentTriggerStyle, cursor: locked ? 'default' : 'pointer', opacity: locked ? 0.7 : 1 } },
+    createElement('button', { type: 'button', className: 'codingns4dsh-agent-trigger', disabled: locked, onClick: () => setOpen((value) => !value), 'aria-label': t('cli.currentAgent', { name: current.name, locked: locked ? t('cli.locked') : '' }), 'aria-haspopup': 'menu', 'aria-expanded': open, style: { ...agentTriggerStyle, cursor: locked ? 'default' : 'pointer', opacity: locked ? 0.7 : 1 } },
       currentIcon === undefined
         ? createElement(ProviderIconFallback, { name: current.name, size: 20 })
         : createElement('img', { src: currentIcon, alt: '', 'aria-hidden': true, style: applyProviderIconShape(current.id, agentTriggerIconStyle) }),
@@ -188,7 +188,7 @@ function AgentSlot(props: CliSlotProps): ReactElement {
         const selected = agent.id === selection.adapterId
         const available = agent.installed && agent.enabled
         const icon = providerIconUrl(agent.id)
-        return createElement('button', { key: agent.id, type: 'button', className: 'dsh-codingns-agent-option', role: 'menuitemradio', 'aria-checked': selected, 'data-selected': String(selected), disabled: !available, onClick: () => choose(agent), style: { ...agentOptionStyle, cursor: available ? 'pointer' : 'not-allowed', opacity: available ? 1 : 0.45 } },
+        return createElement('button', { key: agent.id, type: 'button', className: 'codingns4dsh-agent-option', role: 'menuitemradio', 'aria-checked': selected, 'data-selected': String(selected), disabled: !available, onClick: () => choose(agent), style: { ...agentOptionStyle, cursor: available ? 'pointer' : 'not-allowed', opacity: available ? 1 : 0.45 } },
           createElement('span', { 'aria-hidden': true, style: agentCheckStyle }, selected ? '✓' : ''),
           icon === undefined
             ? createElement(ProviderIconFallback, { name: agent.name, size: 22 })
@@ -321,7 +321,7 @@ function ModelSlot(props: CliSlotProps): ReactElement | null {
   const menu = loading
     ? [
         createElement('div', { key: 'loading', role: 'status', 'aria-live': 'polite', style: modelLoadingMenuStyle },
-          createElement('span', { className: 'dsh-codingns-cli-spinner', 'aria-hidden': true, style: modelSpinnerStyle }),
+          createElement('span', { className: 'codingns4dsh-cli-spinner', 'aria-hidden': true, style: modelSpinnerStyle }),
           createElement('span', undefined, t('cli.loadingModel')),
         ),
       ]
@@ -352,7 +352,7 @@ function ModelSlot(props: CliSlotProps): ReactElement | null {
         ]
   return createElement('div', { style: { position: 'relative', minWidth: 0, display: 'inline-flex' } },
     createElement('button', { type: 'button', disabled: triggerDisabled, 'aria-label': t('cli.chooseModel', { model: modelLabel, effort: effortLabel }), 'aria-busy': loading, 'aria-haspopup': 'menu', 'aria-expanded': open, onClick: () => { setPane('root'); setOpen((value) => !value) }, style: nativeTriggerStyle },
-      loading && createElement('span', { className: 'dsh-codingns-cli-spinner', 'aria-hidden': true, style: modelSpinnerStyle }),
+      loading && createElement('span', { className: 'codingns4dsh-cli-spinner', 'aria-hidden': true, style: modelSpinnerStyle }),
       createElement('span', { role: loading ? 'status' : undefined, 'aria-live': loading ? 'polite' : undefined, style: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, modelLabel),
       !loading && createElement('span', { style: { color: dshThemeColor.labelCaption, whiteSpace: 'nowrap' } }, effortLabel),
       !loading && createElement(NativeDropdownChevron, { open }),

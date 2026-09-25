@@ -39,7 +39,7 @@ export async function resolveTerminalStartupIdentity(
 ): Promise<TerminalStartupIdentity> {
   if (settingsDocumentPath.trim() === '') throw new Error('DSH 设置文档路径为空，无法定位终端持久目录')
   const absoluteSettingsPath = absolutePath(settingsDocumentPath)
-  const hostIdFilename = join(dirname(absoluteSettingsPath), 'dsh-codingns', HOST_ID_FILENAME)
+  const hostIdFilename = join(dirname(absoluteSettingsPath), 'codingns4dsh', HOST_ID_FILENAME)
   await mkdir(dirname(hostIdFilename), { recursive: true, mode: 0o700 })
 
   let hostId: string

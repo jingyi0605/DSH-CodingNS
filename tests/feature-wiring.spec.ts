@@ -197,7 +197,7 @@ test('RPC 主处理器把分发结果转成 Connection 结果，不向外抛错'
   assert.equal(unknown.ok === false ? unknown.error.code : '', 'CODINGNS_RPC_NOT_FOUND')
 })
 
-test('远程设置 RPC 返回版本并只允许修改 CodingNS 字段', async () => {
+test('远程设置 RPC 返回版本并只允许修改 Codingns4DSH 字段', async () => {
   let current = settingsOf({})
   let revision = 4
   let received: unknown

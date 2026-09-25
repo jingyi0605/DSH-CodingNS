@@ -195,7 +195,7 @@ export function createDshGenerationSourceFromHooks(
 }
 
 /**
- * 将已安装的 DSH Connection service 绑定到 CodingNS Transport。
+ * 将已安装的 DSH Connection service 绑定到 Codingns4DSH Transport。
  * 该函数只依赖 DSH 公开的 registerGenerationSource/start/stop，不覆盖默认 Connection。
  */
 export function bindDshConnection(

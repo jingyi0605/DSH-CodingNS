@@ -24,7 +24,7 @@ await writeJson('package.json', manifest)
 
 const profile = await readJson('profile/package.json')
 profile.version = nextVersion
-profile.dependencies['dsh-codingns'] = nextVersion
+profile.dependencies['codingns4dsh'] = nextVersion
 await writeJson('profile/package.json', profile)
 const profileVersion = await readJson('profile/version.json')
 profileVersion.pluginVersion = nextVersion
@@ -41,7 +41,7 @@ for (const relativePath of ['README.md', 'README.en.md', 'profile/README.md']) {
   const document = await readFile(documentPath, 'utf8')
   if (typeof previousVersion === 'string' && previousVersion !== nextVersion) {
     const updatedDocument = document
-      .replaceAll(`dsh-codingns@${previousVersion}`, `dsh-codingns@${nextVersion}`)
+      .replaceAll(`codingns4dsh@${previousVersion}`, `codingns4dsh@${nextVersion}`)
       .replaceAll(`v${previousVersion}`, `v${nextVersion}`)
       .replaceAll(`插件版本为 \`${previousVersion}\``, `插件版本为 \`${nextVersion}\``)
       .replaceAll(`当前插件版本为 \`${previousVersion}\``, `当前插件版本为 \`${nextVersion}\``)
@@ -49,5 +49,5 @@ for (const relativePath of ['README.md', 'README.en.md', 'profile/README.md']) {
   }
 }
 
-console.log(`已将 CodingNS 插件版本切换为 ${nextVersion}`)
+console.log(`已将 Codingns4DSH 插件版本切换为 ${nextVersion}`)
 console.log('请随后运行 pnpm run version:check')

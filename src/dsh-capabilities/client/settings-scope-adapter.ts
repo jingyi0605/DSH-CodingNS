@@ -2,7 +2,7 @@ import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { CodingNsSettings } from '../../shared/contracts/config.js'
 import { accepted, type CodingNsSettingsOperation, type CodingNsSettingsSnapshot, type CodingNsSettingsStore } from '../settings-store.js'
 
-/** 旧版 Client SettingsScope 到 CodingNS 内部设置接口的适配器。 */
+/** 旧版 Client SettingsScope 到 Codingns4DSH 内部设置接口的适配器。 */
 export function createLegacyClientSettingsStore(scope: SettingsScope<CodingNsSettings>): CodingNsSettingsStore<CodingNsSettings> {
   const store: CodingNsSettingsStore<CodingNsSettings> = {
     getSnapshot: () => {

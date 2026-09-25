@@ -13,7 +13,7 @@ import { OpenCodeDriver } from '../data/build/dist/host/cli-adapters/opencode-dr
 import { PiAgentDriver } from '../data/build/dist/host/cli-adapters/pi-driver.js'
 
 function fixture(): { root: string; dispose(): void } {
-  const root = mkdtempSync(join(tmpdir(), 'dsh-codingns-probe-'))
+  const root = mkdtempSync(join(tmpdir(), 'codingns4dsh-probe-'))
   return { root, dispose: () => rmSync(root, { recursive: true, force: true }) }
 }
 

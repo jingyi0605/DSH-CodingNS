@@ -101,7 +101,7 @@ export function LoginProtectionPanel({ services, enabled, snapshot }: FeaturePan
       createElement('legend', { style: dshSettingsFieldLabelStyle }, '应用范围'),
       ...([
         ['lan', '局域网访问', '局域网网卡入口'],
-        ['relay', '中继访问', 'DSH-CodingNS 中继'],
+        ['relay', '中继访问', 'Codingns4DSH 中继'],
       ] as const).map(([key, label, hint]) => createElement('label', { key, style: { display: 'flex', alignItems: 'center', gap: 8, color: dshThemeColor.labelSecondary, fontSize: 13 } },
         createElement('input', { type: 'checkbox', checked: scopes[key], onChange: () => toggleScope(key), style: { accentColor: dshThemeColor.accent } }),
         createElement('span', undefined, `${label}（${hint}）`),

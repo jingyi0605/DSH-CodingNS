@@ -194,7 +194,7 @@ export class CommandCodeDriver implements CodingNsCliDriver {
     const binary = this.cachedBinary ?? (await this.detect()).command
     if (binary === null) throw new Error('Command Code 未安装')
 
-    const transcriptPath = join(tmpdir(), `dsh-codingns-cc-${safeId(input.sessionId)}.jsonl`)
+    const transcriptPath = join(tmpdir(), `codingns4dsh-cc-${safeId(input.sessionId)}.jsonl`)
     writeTranscript(transcriptPath, input)
     const args = ['--session', transcriptPath, '-p', input.prompt, '--output-format', 'json', '--tools-all', '--yolo']
     if (input.modelId) args.push('-m', input.modelId)

@@ -64,7 +64,7 @@ expectEqual('package.peerDependencies.@deepseek-ai/dsh', manifest.peerDependenci
 expectEqual('package.version', manifest.version, pluginVersion)
 expectEqual('profile.version', profile.version, pluginVersion)
 expectEqual('profile.engines.dsh', profile.engines?.dsh, dshCompatibility)
-expectEqual('profile.dependencies.dsh-codingns', profile.dependencies?.['dsh-codingns'], pluginVersion)
+expectEqual('profile.dependencies.codingns4dsh', profile.dependencies?.['codingns4dsh'], pluginVersion)
 if (profile.scripts?.preinstall !== 'node scripts/check-dsh-install.mjs') failures.push('profile.scripts.preinstall 未配置 DSH 安装期版本检查')
 if (profileVersionFile !== undefined) {
   expectEqual('profile/version.json.pluginVersion', profileVersionFile.pluginVersion, pluginVersion)
@@ -83,7 +83,7 @@ for (const sectionName of ['dependencies', 'devDependencies']) {
 }
 
 if (failures.length > 0) {
-  console.error(['DSH/CodingNS 版本未同步：', ...failures.map(item => `- ${item}`)].join('\n'))
+  console.error(['DSH/Codingns4DSH 版本未同步：', ...failures.map(item => `- ${item}`)].join('\n'))
   process.exitCode = 1
 } else {
   console.log(`插件 ${pluginVersion} 兼容 DSH ${dshCompatibility}，当前测试版本 ${dshVersion}`)

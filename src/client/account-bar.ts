@@ -189,7 +189,7 @@ export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, 
   function renderButton(button: HTMLButtonElement): void {
     const identity = auth.account !== null
       ? auth.account.email
-      : auth.status === 'authenticated' ? 'CodingNS'
+      : auth.status === 'authenticated' ? 'Codingns4DSH'
       : local.enabled && local.username ? local.username : '用户'
     button.title = `${identity} · 点击管理登录`
     button.setAttribute('aria-label', `用户：${identity}`)
@@ -250,7 +250,7 @@ export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, 
   function renderMenu(menu: HTMLElement): void {
     const identity = auth.account !== null
       ? auth.account.email
-      : auth.status === 'authenticated' ? 'CodingNS 账号'
+      : auth.status === 'authenticated' ? 'Codingns4DSH 账号'
       : local.enabled && local.username ? `${local.username}（本地账号）` : '未识别账号'
     const access = relayModeLabel()
     menu.innerHTML = ''
@@ -280,7 +280,7 @@ export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, 
       else await fetch('/__codingns/logout', { credentials: 'include', redirect: 'manual' })
       if (typeof location !== 'undefined') location.reload()
     } catch (error) {
-      console.error('dsh-codingns: 用户注销失败', error)
+      console.error('codingns4dsh: 用户注销失败', error)
       busy = false
       renderMenu(menu)
     }
@@ -380,16 +380,16 @@ function resourceRow(dom: Document, label: string, value: number): HTMLElement {
 function isWide(parent: HTMLElement, settings: HTMLElement): boolean { return parent.clientWidth > 96 || getComputedStyle(settings).display !== 'none' && settings.getBoundingClientRect().width > 70 }
 function formatPercent(value: number): string { return `${Math.round(value)}%` }
 function formatBytes(value: number): string { if (value < 1024 ** 3) return `${Math.round(value / 1024 ** 2)} MB`; return `${(value / 1024 ** 3).toFixed(1)} GB` }
-function isRemoteContext(): boolean { return (globalThis as { __DSH_CODINGNS_REMOTE_WEB_CONTEXT__?: unknown }).__DSH_CODINGNS_REMOTE_WEB_CONTEXT__ === true }
+function isRemoteContext(): boolean { return (globalThis as { __CODINGNS4DSH_REMOTE_WEB_CONTEXT__?: unknown }).__CODINGNS4DSH_REMOTE_WEB_CONTEXT__ === true }
 function resolveAccountLogoutTarget(): 'local' | 'relay' {
   if (isRemoteContext()) return 'relay'
   if (typeof location !== 'undefined' && location.hostname.replace(/\.$/u, '').toLowerCase() === 'dsh.codingns.com') return 'relay'
   return 'local'
 }
 function relayModeLabel(): string {
-  const state = globalThis as { __DSH_CODINGNS_RELAY_MODE__?: 'direct' | 'relay' }
-  if (state.__DSH_CODINGNS_RELAY_MODE__ === 'relay') return '中转'
-  if (state.__DSH_CODINGNS_RELAY_MODE__ === 'direct') return '直连'
+  const state = globalThis as { __CODINGNS4DSH_RELAY_MODE__?: 'direct' | 'relay' }
+  if (state.__CODINGNS4DSH_RELAY_MODE__ === 'relay') return '中转'
+  if (state.__CODINGNS4DSH_RELAY_MODE__ === 'direct') return '直连'
   return isRemoteContext() ? '中转' : '直连'
 }
 function loggedOutSnapshot(): CodingNsAuthSessionSnapshot { return { status: 'logged_out', account: null, currentDevice: null, binding: null, expiresAt: null, errorCode: null } }

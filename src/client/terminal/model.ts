@@ -295,7 +295,7 @@ const BINDING_PREFIX = 'dsh.codingns.terminal.binding.v1.'
 const CLOSE_REQUEST_KEY = 'dsh.codingns.terminal.close.v1'
 const SHELL_KEY = 'dsh.codingns.terminal.shell.v1'
 
-/** CodingNS 自有的浏览器终端服务，不依赖官方 terminal-controller Client 实现。 */
+/** Codingns4DSH 自有的浏览器终端服务，不依赖官方 terminal-controller Client 实现。 */
 export class CodingNsWebTerminals extends Service {
   private readonly views = new Map<string, ViewRecord>()
   private readonly workspaceIds = new Map<string, string>()
@@ -502,7 +502,7 @@ function writeString(key: string, value: string): void {
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    /** CodingNS 自有的浏览器终端模型服务。 */
+    /** Codingns4DSH 自有的浏览器终端模型服务。 */
     webTerminals: CodingNsWebTerminals
   }
 }

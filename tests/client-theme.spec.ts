@@ -50,8 +50,8 @@ test('所有 Client 表单不再引用不存在的旧主题令牌', async () => 
 test('切换外部 Agent 时模型选择器立即显示可访问的旋转加载状态', async () => {
   const source = await readFile(join(projectRoot, 'src/client/cli-slots.ts'), 'utf8')
 
-  assert.match(source, /@keyframes dsh-codingns-cli-spin/u)
-  assert.match(source, /className: 'dsh-codingns-cli-spinner'/u)
+  assert.match(source, /@keyframes codingns4dsh-cli-spin/u)
+  assert.match(source, /className: 'codingns4dsh-cli-spinner'/u)
   assert.match(source, /'aria-busy': loading/u)
   assert.match(source, /role: loading \? 'status'/u)
   assert.match(source, /catalogState\?\.adapterId === selection\.adapterId/u)
@@ -67,11 +67,11 @@ test('Agent 选择器位于模型左侧并显示完整 Provider Logo', async () 
     readFile(join(projectRoot, 'data/build/dist/client/bundle.js'), 'utf8'),
   ])
 
-  assert.match(slotSource, /id: 'dsh-codingns-agent',[\s\S]*?order: -20/u)
-  assert.match(slotSource, /id: 'dsh-codingns-model',[\s\S]*?order: -10/u)
+  assert.match(slotSource, /id: 'codingns4dsh-agent',[\s\S]*?order: -20/u)
+  assert.match(slotSource, /id: 'codingns4dsh-model',[\s\S]*?order: -10/u)
   assert.doesNotMatch(slotSource, /slots\.inject\('conversation\.input\.left'/u)
-  assert.match(slotSource, /className: 'dsh-codingns-agent-trigger'/u)
-  assert.match(slotSource, /className: 'dsh-codingns-agent-option'/u)
+  assert.match(slotSource, /className: 'codingns4dsh-agent-trigger'/u)
+  assert.match(slotSource, /className: 'codingns4dsh-agent-option'/u)
   assert.match(slotSource, /role: 'menuitemradio'/u)
   assert.match(slotSource, /CIRCULAR_PROVIDER_ICON_IDS = new Set\(\['gemini', 'grok'\]\)/u)
   assert.match(slotSource, /CIRCULAR_PROVIDER_ICON_IDS\.has\(adapterId\) \? \{ \.\.\.style, borderRadius: '50%' \} : style/u)

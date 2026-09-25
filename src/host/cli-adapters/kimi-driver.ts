@@ -144,7 +144,7 @@ export class KimiCliDriver extends StandardStreamDriver {
         method: 'initialize',
         params: {
           protocol_version: '1.10',
-          client: { name: 'dsh-codingns', version: '0.1.1' },
+          client: { name: 'codingns4dsh', version: '0.1.1' },
           capabilities: { supports_question: true },
         },
       })}\n`)

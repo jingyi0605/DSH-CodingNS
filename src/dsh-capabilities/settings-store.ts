@@ -1,5 +1,5 @@
 /**
- * CodingNS 内部设置存储契约。
+ * Codingns4DSH 内部设置存储契约。
  *
  * 业务模块只依赖这个最小接口，不直接依赖 DSH 的 SettingsScope 或未来的
  * ConfigForm。不同 DSH 版本的读写、revision 和订阅语义都在边界适配器中收敛。

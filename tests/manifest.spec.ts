@@ -10,7 +10,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
 
 test('package manifest declares the DSH bundle and client entry', () => {
-  assert.equal(manifest.name, 'dsh-codingns')
+  assert.equal(manifest.name, 'codingns4dsh')
   assert.equal(manifest.type, 'module')
   assert.equal(manifest.dsh.manifestVersion, 1)
   assert.deepEqual(manifest.dsh.bundle, { patch: './dsh.bundle.patch' })
@@ -48,14 +48,14 @@ test('package manifest declares the DSH bundle and client entry', () => {
 
 test('bundle patch and example profile use DSH native shapes', async () => {
   const patch = await readFile(join(root, 'dsh.bundle.patch'), 'utf8')
-  assert.match(patch, /id: dsh-codingns/u)
-  assert.match(patch, /name: dsh-codingns/u)
+  assert.match(patch, /id: codingns4dsh/u)
+  assert.match(patch, /name: codingns4dsh/u)
   assert.match(patch, /id:\s*terminal-controller[\s\S]*?name:\s*'@deepseek-ai\/dsh-api-terminal-controller'[\s\S]*?disabled:\s*true/u)
   assert.match(patch, /id:\s*ui-sidebar-terminal[\s\S]*?name:\s*'@deepseek-ai\/dsh-client-ui-sidebar-terminal'[\s\S]*?disabled:\s*true/u)
   const profile = JSON.parse(await readFile(join(root, 'profile/package.json'), 'utf8'))
-  assert.deepEqual(profile.dsh.profile.bundles, ['dsh-codingns'])
+  assert.deepEqual(profile.dsh.profile.bundles, ['codingns4dsh'])
   assert.equal(profile.version, manifest.version)
-  assert.equal(profile.dependencies['dsh-codingns'], manifest.version)
+  assert.equal(profile.dependencies['codingns4dsh'], manifest.version)
   assert.equal(profile.engines.dsh, SUPPORTED_DSH_COMPATIBILITY)
   assert.equal(profile.scripts.preinstall, 'node scripts/check-dsh-install.mjs')
   const profileVersion = JSON.parse(await readFile(join(root, 'profile/version.json'), 'utf8'))

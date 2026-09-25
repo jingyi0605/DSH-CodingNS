@@ -24,7 +24,7 @@ export interface StandardStreamDriverOptions {
 }
 
 /**
- * 把采用 JSONL/stream-json 的 CLI 统一成 CodingNS 的最小驱动契约。
+ * 把采用 JSONL/stream-json 的 CLI 统一成 Codingns4DSH 的最小驱动契约。
  * 子类只需提供命令参数和事件映射，进程终止、stderr 消费及清理由这里统一处理。
  */
 export abstract class StandardStreamDriver implements CodingNsCliDriver {

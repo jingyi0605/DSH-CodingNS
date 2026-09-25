@@ -143,7 +143,7 @@ test('Command Code usage 保留缓存桶，并按完整输入计算未缓存输�
 })
 
 test('Command Code 订阅服务只返回脱敏窗口并统一毫秒重置时间', async () => {
-  const homeDirectory = mkdtempSync(join(tmpdir(), 'dsh-codingns-command-code-subscription-'))
+  const homeDirectory = mkdtempSync(join(tmpdir(), 'codingns4dsh-command-code-subscription-'))
   writeFileSync(join(homeDirectory, 'auth.json'), JSON.stringify({ apiKey: 'secret-key' }), 'utf8')
   try {
     const service = new CommandCodeSubscriptionService({
@@ -169,7 +169,7 @@ test('Command Code 订阅服务只返回脱敏窗口并统一毫秒重置时间'
 })
 
 test('Claude Code 订阅服务读取 OAuth 用量并且不返回访问令牌', async () => {
-  const homeDirectory = mkdtempSync(join(tmpdir(), 'dsh-codingns-claude-subscription-'))
+  const homeDirectory = mkdtempSync(join(tmpdir(), 'codingns4dsh-claude-subscription-'))
   writeFileSync(join(homeDirectory, '.credentials.json'), JSON.stringify({ claudeAiOauth: { accessToken: 'oauth-secret', subscriptionType: 'max' } }), 'utf8')
   try {
     const service = new ClaudeCodeSubscriptionService({
@@ -263,7 +263,7 @@ test('Codex 检测到第三方上游但 Sub2API 不可用时不回退官方订�
 })
 
 test('OpenCode 订阅服务只识别本地认证而不伪造额度', async () => {
-  const homeDirectory = mkdtempSync(join(tmpdir(), 'dsh-codingns-opencode-subscription-'))
+  const homeDirectory = mkdtempSync(join(tmpdir(), 'codingns4dsh-opencode-subscription-'))
   writeFileSync(join(homeDirectory, 'auth.json'), JSON.stringify({ deepseek: { type: 'api', key: 'provider-secret' } }), 'utf8')
   try {
     const result = await new OpenCodeSubscriptionService({ homeDirectory }).read()

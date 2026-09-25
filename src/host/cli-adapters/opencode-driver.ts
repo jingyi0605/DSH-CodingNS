@@ -27,7 +27,7 @@ export interface OpenCodeDriverOptions {
   readonly serverArgs?: readonly string[]
 }
 
-/** OpenCode 的 server/SSE 适配器，向上只暴露 CodingNS 标准流。 */
+/** OpenCode 的 server/SSE 适配器，向上只暴露 Codingns4DSH 标准流。 */
 export class OpenCodeDriver implements CodingNsCliDriver {
   readonly descriptor = { id: 'opencode', name: 'OpenCode', protocol: 'http-sse', capabilities: ['models', 'stream', 'resume', 'interrupt', 'tool-events', 'reasoning', 'usage', 'permission', 'questions'] as const } as const
   private readonly binaries: readonly string[]

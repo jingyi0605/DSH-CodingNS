@@ -9,7 +9,7 @@ import type {
  *
  * 这里故意不直接依赖 dsh-session 或 dsh-api-session-controller：插件的
  * package.json 只锁定 DSH 兼容版本，某些精简 Host 可能没有装载完整会话服务。
- * 运行时探测可以让这类 Host 继续使用 CodingNS，而完整 DSH 则优先走原生 API。
+ * 运行时探测可以让这类 Host 继续使用 Codingns4DSH，而完整 DSH 则优先走原生 API。
  */
 export interface CodingNsNativeSessionStore {
   get(sessionId: string): unknown

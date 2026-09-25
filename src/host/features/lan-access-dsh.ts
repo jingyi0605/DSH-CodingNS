@@ -28,7 +28,7 @@ export function createLanAccessDshFeature(options: { runtime?: LanAccessDshRunti
             await proxy.start({ ...toStartInput(value.lanAccessDsh), ...(loginConfig === null ? {} : { login: loginConfig }) })
           } catch (error) {
             // 自动启动失败不能阻断 DSH，其它功能仍应正常可用；用户仍可在卡片中手动重试。
-            console.error('dsh-codingns: 局域网访问 DSH 自动启动失败', error)
+            console.error('codingns4dsh: 局域网访问 DSH 自动启动失败', error)
           }
         }
         await autoStart(settings.get())

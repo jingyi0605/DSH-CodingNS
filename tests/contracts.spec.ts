@@ -37,7 +37,7 @@ function descriptorOf(name: string, options: {
   }
 }
 
-test('CodingNS 设置用模块名字典表达开关，结构不随模块数量变化', () => {
+test('Codingns4DSH 设置用模块名字典表达开关，结构不随模块数量变化', () => {
   assert.equal(CODINGNS_SETTINGS_NAMESPACE, 'codingns')
   assert.equal(CODINGNS_MODULES_FIELD, 'modules')
   assert.deepEqual(DEFAULT_CODINGNS_SETTINGS, {

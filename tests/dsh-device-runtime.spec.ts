@@ -49,7 +49,7 @@ test('DSH Host 首次启动注册独立设备并保存 device credential', async
     },
     async listDshDevices() { calls.push('list'); return { devices: [] } },
     async heartbeatDshDevice() { calls.push('heartbeat'); return { device: {} as never, credentialVersion: 1 } },
-    async createDshRelayTicket() { calls.push('ticket'); return { ...ticket(), product: 'dsh-codingns' as const, dshDeviceId: 'dsh-device-1' } },
+    async createDshRelayTicket() { calls.push('ticket'); return { ...ticket(), product: 'codingns4dsh' as const, dshDeviceId: 'dsh-device-1' } },
   }
   const signalingSocketFactory = async () => {
     const listeners = new Map<string, Set<(event: Event) => void>>()

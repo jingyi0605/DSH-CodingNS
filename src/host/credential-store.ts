@@ -12,7 +12,7 @@ export interface HostCredentialRecord {
   savedAt: string
 }
 
-/** Host 凭据存储抽象；生产实现应接入 DSH/CodingNS 的安全凭据存储。 */
+/** Host 凭据存储抽象；生产实现应接入 DSH/Codingns4DSH 的安全凭据存储。 */
 export interface CodingNsCredentialStore {
   read(): Promise<HostCredentialRecord | null>
   write(record: HostCredentialRecord): Promise<void>
@@ -42,7 +42,7 @@ export class InMemoryCodingNsCredentialStore implements CodingNsCredentialStore 
 /** Host 侧 refresh token 的文件存储；文件权限限制为当前用户可读写。 */
 export class FileCodingNsCredentialStore implements CodingNsCredentialStore {
   constructor(private readonly filePath: string) {
-    if (!filePath.trim()) throw new TypeError('CodingNS credential file path 不能为空')
+    if (!filePath.trim()) throw new TypeError('Codingns4DSH credential file path 不能为空')
   }
 
   async read(): Promise<HostCredentialRecord | null> {
@@ -72,7 +72,7 @@ export class FileCodingNsCredentialStore implements CodingNsCredentialStore {
   }
 }
 
-/** DSH device credential 独立存储，避免与 CodingNS refresh token 混用。 */
+/** DSH device credential 独立存储，避免与 Codingns4DSH refresh token 混用。 */
 export interface DshDeviceCredentialStore {
   read(): Promise<DshDeviceCredentialRecord | null>
   write(record: DshDeviceCredentialRecord): Promise<void>
@@ -120,7 +120,7 @@ export class FileDshDeviceCredentialStore implements DshDeviceCredentialStore {
 
 function parseHostCredential(value: unknown): HostCredentialRecord {
   if (!isRecord(value) || typeof value.controlBaseUrl !== 'string' || typeof value.accountId !== 'string' || typeof value.refreshToken !== 'string' || typeof value.refreshTokenExpiresAt !== 'string' || (typeof value.deviceId !== 'string' && value.deviceId !== null) || typeof value.savedAt !== 'string') {
-    throw new Error('CodingNS credential 文件格式无效')
+    throw new Error('Codingns4DSH credential 文件格式无效')
   }
   return { controlBaseUrl: value.controlBaseUrl, accountId: value.accountId, refreshToken: value.refreshToken, refreshTokenExpiresAt: value.refreshTokenExpiresAt, deviceId: value.deviceId, savedAt: value.savedAt }
 }

@@ -23,7 +23,7 @@ class FakeCarrier implements CodingNsCarrier {
   async close(): Promise<void> { this.state = 'closed' }
 }
 
-test('适配层将 DSH rpc.call 路由映射到 CodingNS Transport', async () => {
+test('适配层将 DSH rpc.call 路由映射到 Codingns4DSH Transport', async () => {
   const carrier = new FakeCarrier()
   const transport = new DshCodingNsTransport({ carrier, generation: { id: 1, host: { home: '/tmp' } } })
   const hooks = createDshClientTransportHooks(transport)

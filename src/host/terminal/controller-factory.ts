@@ -128,8 +128,8 @@ async function assembleController(
   ctx.effect(
     () => () => service.dispose(),
     options.mode === 'baseline'
-      ? 'dsh-codingns: 本机 PTY 与终端 attach 清理'
-      : 'dsh-codingns: 持久终端 attach 清理',
+      ? 'codingns4dsh: 本机 PTY 与终端 attach 清理'
+      : 'codingns4dsh: 持久终端 attach 清理',
   )
   return {
     mode: options.mode,

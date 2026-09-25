@@ -8,7 +8,7 @@ import {
 } from '../shared/contracts/config.js'
 
 /**
- * DSH 设置服务使用的 CodingNS namespace schema。
+ * DSH 设置服务使用的 Codingns4DSH namespace schema。
  *
  * 模块开关用字典表达：新增模块只是字典里多一个键，既不需要改这个 schema，
  * 也不需要改 CodingNsSettings 接口。
@@ -87,7 +87,7 @@ function nullableNumberSchema(min: number, max: number): z<number | null> {
 }
 
 /**
- * 在 Host 设置文档中注册 CodingNS 的持久化选项。
+ * 在 Host 设置文档中注册 Codingns4DSH 的持久化选项。
  *
  * 必须在已经注入 `settings` 的上下文里调用。返回的 scope 既用于读取当前值，
  * 也通过 watch 驱动功能模块启停。

@@ -132,10 +132,10 @@ function readArguments(argv: readonly string[]): BrokerArguments {
     if (name?.startsWith('--') && value !== undefined) values.set(name.slice(2), value)
   }
   const pipeName = values.get('pipe')
-  const auth = values.get('auth') ?? process.env.DSH_CODINGNS_TERMINAL_AUTH
+  const auth = values.get('auth') ?? process.env.CODINGNS4DSH_TERMINAL_AUTH
   const shellPath = values.get('shell')
   const cwd = values.get('cwd')
-  const shellArgs = parseShellArgs(process.env.DSH_CODINGNS_TERMINAL_ARGS)
+  const shellArgs = parseShellArgs(process.env.CODINGNS4DSH_TERMINAL_ARGS)
   if (!pipeName || !auth || !shellPath || !cwd) throw new Error('ConPTY broker 启动参数不完整')
   return { pipeName, auth, shellPath, shellArgs, cwd }
 }

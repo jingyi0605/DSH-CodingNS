@@ -22,10 +22,10 @@ import { createDshCapabilityRegistry } from '../dsh-capabilities/index.js'
 export function apply(ctx?: Context): void {
   if (ctx === undefined) return
   const dshVersion = detectRuntimeDshVersion()
-  console.error('dsh-codingns: host apply entered')
+  console.error('codingns4dsh: host apply entered')
 
   ctx.inject(['settings', 'connection', 'webServer'], async (hostCtx) => {
-    console.error('dsh-codingns: host inject ready', {
+    console.error('codingns4dsh: host inject ready', {
       hasConnection: hostCtx.connection !== undefined,
     })
     const webServerPort = (hostCtx as Context & { webServer: { port: number } }).webServer.port
@@ -79,9 +79,9 @@ export function apply(ctx?: Context): void {
 
     try {
       registerCodingNsRpc(hostCtx, services.rpc, services.settingsProvider)
-      console.error('dsh-codingns: host RPC registration requested')
+      console.error('codingns4dsh: host RPC registration requested')
     } catch (error) {
-      console.error('dsh-codingns: host RPC registration failed', error)
+      console.error('codingns4dsh: host RPC registration failed', error)
       throw error
     }
 
@@ -90,12 +90,12 @@ export function apply(ctx?: Context): void {
         void registry
           .reconcile(enabledFeatureNames(registry.descriptors(), settings.get(), restartStates, dshVersion))
           .catch((error: unknown) => {
-            console.error('dsh-codingns: 功能模块状态同步失败', error)
+            console.error('codingns4dsh: 功能模块状态同步失败', error)
           })
       }
       sync()
       return settings.watch(sync)
-    }, 'dsh-codingns: 功能模块启停同步')
+    }, 'codingns4dsh: 功能模块启停同步')
   })
 }
 

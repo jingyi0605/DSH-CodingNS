@@ -1,5 +1,5 @@
 /**
- * CodingNS Relay Host 运行时。
+ * Codingns4DSH Relay Host 运行时。
  *
  * 这个模块把 Host 侧真正需要的运行时资源集中起来：DTLS 身份、Host 票据、
  * Relay 信令 WebSocket 以及每个 Client 独立的 werift PeerConnection。业务层
@@ -104,7 +104,7 @@ export interface HostRelaySession extends WebRtcHostSession {
 
 export interface HostRelayRuntimeOptions {
   readonly controlClient: Pick<CodingNsControlApiClient, 'createSignalingTicket'>
-  /** DSH 独立设备可注入自己的票据申请器，避免复用 CodingNS binding。 */
+  /** DSH 独立设备可注入自己的票据申请器，避免复用 Codingns4DSH binding。 */
   readonly createTicket?: (input: { accessToken: string; identity: HostDtlsIdentityMaterial; credentialVersion?: number }) => Promise<RelaySignalingTicketResponse>
   readonly accessToken: string
   readonly bindingId?: string

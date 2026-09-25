@@ -25,10 +25,10 @@ test('H5 使用 Ticket 下发的 canonical HostScope，兼容旧 Ticket 时回�
     iceTransportPolicy: 'all' as const,
     hostDtlsFingerprint: 'SHA256:test',
     bindingId: 'dshdev_test',
-    tunnelDomain: 'dshdev_test.dsh-codingns',
+    tunnelDomain: 'dshdev_test.codingns4dsh',
     trafficRemainingBytes: '0',
     credentialVersion: 1,
-    product: 'dsh-codingns' as const,
+    product: 'codingns4dsh' as const,
     dshDeviceId: 'dshdev_test',
   }
   assert.deepEqual(resolveDshHostScope(base), { hostId: 'dshdev_test', kind: 'local' })

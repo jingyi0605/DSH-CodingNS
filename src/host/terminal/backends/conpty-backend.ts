@@ -162,7 +162,7 @@ export class ConptyTerminalBackend implements TerminalRuntimeAdapter {
 
 export function conptyPipeName(runtimeSessionKey: string): string {
   const digest = createHash('sha256').update(runtimeSessionKey).digest('hex').slice(0, 40)
-  return `\\\\.\\pipe\\dsh-codingns-${digest}`
+  return `\\\\.\\pipe\\codingns4dsh-${digest}`
 }
 
 function launchDetachedBroker(input: Parameters<NonNullable<ConptyBackendOptions['launchBroker']>>[0]): void {
@@ -175,8 +175,8 @@ function launchDetachedBroker(input: Parameters<NonNullable<ConptyBackendOptions
   ], {
     env: {
       ...input.env,
-      DSH_CODINGNS_TERMINAL_AUTH: input.auth,
-      DSH_CODINGNS_TERMINAL_ARGS: JSON.stringify(input.shellArgs),
+      CODINGNS4DSH_TERMINAL_AUTH: input.auth,
+      CODINGNS4DSH_TERMINAL_ARGS: JSON.stringify(input.shellArgs),
     },
     detached: true,
     stdio: 'ignore',

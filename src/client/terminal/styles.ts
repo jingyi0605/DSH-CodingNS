@@ -1,22 +1,22 @@
-const STYLE_ID = 'dsh-codingns-terminal-ui'
+const STYLE_ID = 'codingns4dsh-terminal-ui'
 
 export const terminalClass = {
-  guideEntry: 'dsh-codingns-terminal-guide-entry',
-  guideMain: 'dsh-codingns-terminal-guide-main',
-  guideIcon: 'dsh-codingns-terminal-guide-icon',
-  guideText: 'dsh-codingns-terminal-guide-text',
-  guideTitle: 'dsh-codingns-terminal-guide-title',
-  guideDescription: 'dsh-codingns-terminal-guide-description',
-  guideTrigger: 'dsh-codingns-terminal-guide-trigger',
-  guideMenu: 'dsh-codingns-terminal-guide-menu',
-  title: 'dsh-codingns-terminal-title',
-  titleInput: 'dsh-codingns-terminal-title-input',
-  root: 'dsh-codingns-terminal-root',
-  screen: 'dsh-codingns-terminal-screen',
-  status: 'dsh-codingns-terminal-status',
-  error: 'dsh-codingns-terminal-error',
-  cleanupStack: 'dsh-codingns-terminal-cleanup-stack',
-  cleanupNotice: 'dsh-codingns-terminal-cleanup-notice',
+  guideEntry: 'codingns4dsh-terminal-guide-entry',
+  guideMain: 'codingns4dsh-terminal-guide-main',
+  guideIcon: 'codingns4dsh-terminal-guide-icon',
+  guideText: 'codingns4dsh-terminal-guide-text',
+  guideTitle: 'codingns4dsh-terminal-guide-title',
+  guideDescription: 'codingns4dsh-terminal-guide-description',
+  guideTrigger: 'codingns4dsh-terminal-guide-trigger',
+  guideMenu: 'codingns4dsh-terminal-guide-menu',
+  title: 'codingns4dsh-terminal-title',
+  titleInput: 'codingns4dsh-terminal-title-input',
+  root: 'codingns4dsh-terminal-root',
+  screen: 'codingns4dsh-terminal-screen',
+  status: 'codingns4dsh-terminal-status',
+  error: 'codingns4dsh-terminal-error',
+  cleanupStack: 'codingns4dsh-terminal-cleanup-stack',
+  cleanupNotice: 'codingns4dsh-terminal-cleanup-notice',
 } as const
 
 /** 安装与 DSH 0.1.6 内置终端相同的布局和主题令牌。 */
@@ -24,7 +24,7 @@ export function installTerminalStyles(): () => void {
   const existing = document.querySelector<HTMLStyleElement>(`style[data-plugin-css="${STYLE_ID}"]`)
   if (existing !== null) return () => undefined
   const style = document.createElement('style')
-  style.dataset.plugin = 'dsh-codingns'
+  style.dataset.plugin = 'codingns4dsh'
   style.dataset.pluginCss = STYLE_ID
   style.textContent = terminalCss
   document.head.appendChild(style)

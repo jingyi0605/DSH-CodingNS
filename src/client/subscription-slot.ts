@@ -22,7 +22,7 @@ interface SubscriptionSlotProps {
 export function registerSubscriptionSlot(slots: SlotRegistry, rpc: CodingNsRpcClient): () => void {
   return slots.inject('conversation.composer.dock', () => slots.register({
     name: 'conversation.composer.dock',
-    id: 'dsh-codingns-subscription',
+    id: 'codingns4dsh-subscription',
     order: -20,
     label: 'Agent 订阅余量',
     inject: (sessionId: string) => ({ rpc, sessionId }),
@@ -240,7 +240,7 @@ function isSubscriptionAdapter(adapterId: unknown): adapterId is 'command-code' 
   return adapterId === 'command-code' || adapterId === 'codex' || adapterId === 'claude-code' || adapterId === 'dsh' || adapterId === 'grok' || adapterId === 'opencode'
 }
 function isRemoteWebContext(): boolean {
-  return (globalThis as { __DSH_CODINGNS_REMOTE_WEB_CONTEXT__?: unknown }).__DSH_CODINGNS_REMOTE_WEB_CONTEXT__ === true
+  return (globalThis as { __CODINGNS4DSH_REMOTE_WEB_CONTEXT__?: unknown }).__CODINGNS4DSH_REMOTE_WEB_CONTEXT__ === true
 }
 function subscriptionProviderName(adapterId: string | null): string {
   switch (adapterId) {

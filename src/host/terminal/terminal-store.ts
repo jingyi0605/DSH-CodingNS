@@ -148,7 +148,7 @@ export class InMemoryTerminalStorePersistence implements TerminalStorePersistenc
 }
 
 export function terminalStorePath(settingsDocumentPath: string): string {
-  return `${dirname(settingsDocumentPath)}/dsh-codingns/terminals.json`
+  return `${dirname(settingsDocumentPath)}/codingns4dsh/terminals.json`
 }
 
 function parseDocument(value: unknown): TerminalStoreDocument {

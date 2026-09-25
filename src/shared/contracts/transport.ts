@@ -1,6 +1,6 @@
 import type { CodingNsDshErrorCode } from './errors.js'
 
-/** CodingNS Host RPC 的固定逻辑通道。 */
+/** Codingns4DSH Host RPC 的固定逻辑通道。 */
 export const CODINGNS_RPC_CHANNEL = '/codingns'
 
 export interface CodingNsRpcRequest<TPayload = unknown> {

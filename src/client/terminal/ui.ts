@@ -29,7 +29,7 @@ import { CodingNsXtermView } from './xterm-view.js'
 import { codingNsTranslator, useCodingNsTranslator, type CodingNsLocale } from '../locale.js'
 import type { CodingNsSettingsStore } from '../../dsh-capabilities/settings-store.js'
 
-export const TERMINAL_PROVIDER_ID = 'dsh-codingns/terminal'
+export const TERMINAL_PROVIDER_ID = 'codingns4dsh/terminal'
 export const TERMINAL_KIND = 'terminal'
 
 interface TerminalParams {
@@ -120,7 +120,7 @@ export function registerCodingNsTerminalUi(
     inject: () => ({ webTerminals, locale: ctx.locale }),
   }, TerminalGuide)))
   disposers.push(ctx.slots.inject('shell.overlay', () => ctx.slots.register({
-    name: 'shell.overlay', id: 'dsh-codingns-terminal-cleanup', order: 1000,
+    name: 'shell.overlay', id: 'codingns4dsh-terminal-cleanup', order: 1000,
     inject: () => ({ webTerminals, locale: ctx.locale }),
   }, TerminalCleanup)))
   if (typeof registerCloseHandler === 'function') disposers.push(registerCloseHandler.call(ctx.sidebarRight, TERMINAL_KIND, (sessionId, tab) => {

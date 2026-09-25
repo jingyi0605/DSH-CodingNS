@@ -8,14 +8,14 @@ import { CODINGNS_RPC_CHANNEL } from '../../shared/contracts/transport.js'
 
 function isRemoteWebContext(): boolean {
   return (globalThis as typeof globalThis & {
-    readonly __DSH_CODINGNS_REMOTE_WEB_CONTEXT__?: boolean
-  }).__DSH_CODINGNS_REMOTE_WEB_CONTEXT__ === true
+    readonly __CODINGNS4DSH_REMOTE_WEB_CONTEXT__?: boolean
+  }).__CODINGNS4DSH_REMOTE_WEB_CONTEXT__ === true
 }
 
 /**
  * 中转访问服务模块。
  *
- * 它把 DSH 页面接入 DSH-CodingNS 独立设备隧道。登录和设备列表由 Host RPC 提供，
+ * 它把 DSH 页面接入 Codingns4DSH 独立设备隧道。登录和设备列表由 Host RPC 提供，
  * 连接状态和设备选择由设置面板承载；隧道本身在模块启用时建立。
  */
 export const reverseProxyFeature: CodingNsClientFeatureModule = {
@@ -27,7 +27,7 @@ export const reverseProxyFeature: CodingNsClientFeatureModule = {
     runtime: 'client',
     ui: {
       label: '中转访问服务',
-      description: '通过 DSH-CodingNS 独立设备隧道访问 Host。',
+      description: '通过 Codingns4DSH 独立设备隧道访问 Host。',
       labelKey: 'feature.reverseProxy.label',
       descriptionKey: 'feature.reverseProxy.description',
       order: 20,
@@ -68,7 +68,7 @@ export const reverseProxyFeature: CodingNsClientFeatureModule = {
         disposeConnection = dispose
       } catch (error) {
         if (stopped || abort.signal.aborted) return
-        console.error('dsh-codingns: 中继连接建立失败，将在稍后重试', error)
+        console.error('codingns4dsh: 中继连接建立失败，将在稍后重试', error)
         retryTimer = setTimeout(() => { void attempt() }, 5_000)
       }
     }
@@ -87,10 +87,10 @@ export const reverseProxyFeature: CodingNsClientFeatureModule = {
 /** 浏览器侧真实中继连接；refresh token 和 access token 只经过 Host RPC。 */
 export async function startBrowserRelayConnection(rpc: CodingNsRpcClient, signal: AbortSignal, loginProtectionToken?: string): Promise<() => Promise<void>> {
   const bootstrap = await startDshH5Bootstrap({ rpc, signal, ...(loginProtectionToken === undefined ? {} : { loginProtectionToken }) })
-  const state = globalThis as typeof globalThis & { __DSH_CODINGNS_RELAY_MODE__?: 'direct' | 'relay' }
-  state.__DSH_CODINGNS_RELAY_MODE__ = bootstrap.relayMode
+  const state = globalThis as typeof globalThis & { __CODINGNS4DSH_RELAY_MODE__?: 'direct' | 'relay' }
+  state.__CODINGNS4DSH_RELAY_MODE__ = bootstrap.relayMode
   return async () => {
-    if (state.__DSH_CODINGNS_RELAY_MODE__ === bootstrap.relayMode) delete state.__DSH_CODINGNS_RELAY_MODE__
+    if (state.__CODINGNS4DSH_RELAY_MODE__ === bootstrap.relayMode) delete state.__CODINGNS4DSH_RELAY_MODE__
     await bootstrap.dispose()
   }
 }

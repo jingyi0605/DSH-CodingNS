@@ -1,8 +1,8 @@
 import type { RelayIceServer, RelaySignalingTicketResponse } from './signaling.js'
 
-/** DSH-CodingNS 自己的设备记录，不与 CodingNS Host binding 共用身份。 */
+/** Codingns4DSH 自己的设备记录，不与 Codingns4DSH Host binding 共用身份。 */
 export interface DshDeviceSummary {
-  /** DSH 独立设备身份；不能与 CodingNS host bindingId 混用。 */
+  /** DSH 独立设备身份；不能与 Codingns4DSH host bindingId 混用。 */
   dshDeviceId: string
   /** 旧 DTO 兼容字段，服务端迁移期间可存在。 */
   deviceId?: string
@@ -50,9 +50,9 @@ export interface DshRelayTicketRequest {
   role?: 'host' | 'client'
 }
 
-/** DSH ticket 复用 Relay 的 ICE/信令字段，但不带 CodingNS bindingId。 */
+/** DSH ticket 复用 Relay 的 ICE/信令字段，但不带 Codingns4DSH bindingId。 */
 export interface DshRelayTicketResponse extends Omit<RelaySignalingTicketResponse, 'bindingId' | 'tunnelDomain' | 'hostDtlsFingerprint' | 'credentialVersion'> {
-  product: 'dsh-codingns'
+  product: 'codingns4dsh'
   dshDeviceId: string
   hostDtlsFingerprint: string
   tunnelDomain?: string

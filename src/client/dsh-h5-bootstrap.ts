@@ -317,8 +317,8 @@ function createPeerConnection(options: { iceServers: readonly { urls: string | s
 async function callRpc<T>(rpc: CodingNsRpcClient, endpoint: string, payload: unknown, signal?: AbortSignal): Promise<T> {
   let result = await rpc.call('/codingns', endpoint, payload, signal)
   // 旧 Host 在 auth 命名空间下暂时暴露 DSH 动作；迁移期间只允许此兼容回退，
-  // 数据和身份仍然使用 DSH 独立 DTO，不会回退到 CodingNS binding。
-  if (!result.ok && (result.error.code === 'CODINGNS_RPC_NOT_FOUND' || /未知 CodingNS RPC/u.test(result.error.message))) {
+  // 数据和身份仍然使用 DSH 独立 DTO，不会回退到 Codingns4DSH binding。
+  if (!result.ok && (result.error.code === 'CODINGNS_RPC_NOT_FOUND' || /未知 Codingns4DSH RPC/u.test(result.error.message))) {
     result = await rpc.call('/codingns', `auth/${endpoint}`, payload, signal)
   }
   if (!result.ok) throw new Error(result.error.message)

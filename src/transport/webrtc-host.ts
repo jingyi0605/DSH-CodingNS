@@ -55,7 +55,7 @@ export interface WebRtcHostAcceptor {
 
 /**
  * 构造 Host 申请角色票据的请求 DTO，并在进入 Control API 前检查边界。
- * 指纹只做非空和控制字符校验，具体格式由 CodingNS 绑定记录比较逻辑决定。
+ * 指纹只做非空和控制字符校验，具体格式由 Codingns4DSH 绑定记录比较逻辑决定。
  */
 export function createHostSignalingTicketRequest(input: HostSignalingTicketRequest): RelaySignalingTicketRequest {
   if (/[\r\n]/u.test(input.hostDtlsFingerprint)) {

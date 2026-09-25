@@ -1,6 +1,6 @@
 /** 登录保护会话只放在当前浏览器标签页，关闭标签页即失效。 */
-export const LOGIN_PROTECTION_SESSION_KEY = 'dsh-codingns.login-protection.relay-token'
-export const LOGIN_PROTECTION_SESSION_EVENT = 'dsh-codingns-login-protection-session'
+export const LOGIN_PROTECTION_SESSION_KEY = 'codingns4dsh.login-protection.relay-token'
+export const LOGIN_PROTECTION_SESSION_EVENT = 'codingns4dsh-login-protection-session'
 let memoryToken: string | undefined
 
 export function readLoginProtectionSession(): string | undefined {

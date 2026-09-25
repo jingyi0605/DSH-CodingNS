@@ -77,7 +77,7 @@ export async function restoreCliSession(
   navigateToDshSession(record.dshSessionId)
 }
 
-/** 通过 Host 同步归档 DSH 原生会话和 CodingNS 外部会话索引。 */
+/** 通过 Host 同步归档 DSH 原生会话和 Codingns4DSH 外部会话索引。 */
 export async function archiveCliSession(
   rpc: CodingNsRpcClient,
   sessionId: string,

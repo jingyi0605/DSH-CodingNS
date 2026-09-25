@@ -1,4 +1,4 @@
-/** CodingNS 当前可接入的外部 Agent 标识。内部字段沿用 cli 命名以保持协议兼容。 */
+/** Codingns4DSH 当前可接入的外部 Agent 标识。内部字段沿用 cli 命名以保持协议兼容。 */
 export type CodingNsCliAdapterId = string
 
 /** Host 侧可供 Client 展示的外部 Agent 摘要。 */

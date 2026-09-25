@@ -6,7 +6,7 @@ import type { CodingNsSettings } from '../../shared/contracts/config.js'
 import type { CodingNsLocale } from '../locale.js'
 import type { CodingNsSettingsSnapshot, CodingNsSettingsStore } from '../../dsh-capabilities/settings-store.js'
 
-/** 一次 CodingNS RPC 的结果，与 DSH Connection 的结果形状一致。 */
+/** 一次 Codingns4DSH RPC 的结果，与 DSH Connection 的结果形状一致。 */
 export type CodingNsRpcResult =
   | { readonly ok: true; readonly value: unknown }
   | { readonly ok: false; readonly error: { readonly code: string; readonly message: string } }
@@ -24,7 +24,7 @@ export interface CodingNsClientServices {
   readonly rpc: CodingNsRpcClient
   /** DSH Typert Remote；归档会话模块只通过运行时探测调用可选方法。 */
   readonly remote?: unknown
-  /** DSH 语言运行时；所有 Client 文案都从 CodingNS 命名空间读取。 */
+  /** DSH 语言运行时；所有 Client 文案都从 Codingns4DSH 命名空间读取。 */
   readonly locale: CodingNsLocale
   /** DSH 对话装配服务；用于注册不写入 Session 的流式临时节点。 */
   readonly uiConversation?: unknown

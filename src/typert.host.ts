@@ -1,5 +1,5 @@
 /*
- * dsh-codingns 自有的 Typert Host artifact。
+ * codingns4dsh 自有的 Typert Host artifact。
  *
  * 这里不能重导出官方 terminal-controller 的 TYPERT：DSH loader 会校验
  * manifest.package 必须属于实际导出它的 npm 包。下面的 endpoint、wire 字段和
@@ -100,7 +100,7 @@ function invocation(
   options: { readonly stream?: boolean; readonly cancellable?: boolean; readonly agentScoped?: boolean } = {},
 ): Record<string, unknown> {
   return {
-    id: `dsh-codingns#terminal/${method}`,
+    id: `codingns4dsh#terminal/${method}`,
     service: 'terminalController',
     namespace: 'terminal',
     method,
@@ -113,22 +113,22 @@ function invocation(
   }
 }
 
-const voidResult = (method: string): StrictCodec => codec(`dsh-codingns#terminal/${method}:result`, z.void())
+const voidResult = (method: string): StrictCodec => codec(`codingns4dsh#terminal/${method}:result`, z.void())
 const idParameter = (): InvocationParameter => json(
   'id',
   'id',
-  'dsh-codingns/shared#WebTerminalId',
+  'codingns4dsh/shared#WebTerminalId',
   terminalIdSchema,
 )
 const attachmentParameter = (): InvocationParameter => json(
   'attachmentId',
   'attachmentId',
-  'dsh-codingns/shared#TerminalAttachmentId',
+  'codingns4dsh/shared#TerminalAttachmentId',
   attachmentIdSchema,
 )
 
 export const TYPERT = {
-  package: 'dsh-codingns',
+  package: 'codingns4dsh',
   face: 'host',
   schemas: [],
   invocations: [
@@ -138,19 +138,19 @@ export const TYPERT = {
       json(
         'request',
         'request',
-        'dsh-codingns/shared#CodingNsTerminalCreateRequest',
+        'codingns4dsh/shared#CodingNsTerminalCreateRequest',
         createRequestSchema,
       ),
-    ], codec('dsh-codingns/shared#CodingNsWebTerminalInfo', terminalInfoSchema), {
+    ], codec('codingns4dsh/shared#CodingNsWebTerminalInfo', terminalInfoSchema), {
       agentScoped: true,
       cancellable: true,
     }),
     invocation('environment', [agent()], codec(
-      'dsh-codingns/shared#CodingNsTerminalEnvironment',
+      'codingns4dsh/shared#CodingNsTerminalEnvironment',
       environmentSchema,
     ), { agentScoped: true, cancellable: true }),
     invocation('follow', [agent(), idParameter(), attachmentParameter()], codec(
-      'dsh-codingns/shared#CodingNsTerminalFrame',
+      'codingns4dsh/shared#CodingNsTerminalFrame',
       terminalFrameSchema,
     ), { agentScoped: true, cancellable: true, stream: true }),
     invocation('list', [json(
@@ -158,43 +158,43 @@ export const TYPERT = {
       'sessionId',
       '@deepseek-ai/dsh-session/types#SessionId',
       sessionIdSchema,
-    )], codec('dsh-codingns#terminal/list:result', z.array(terminalInfoSchema))),
+    )], codec('codingns4dsh#terminal/list:result', z.array(terminalInfoSchema))),
     invocation('rename', [
       agent(),
       idParameter(),
-      json('title', 'title', 'dsh-codingns#terminal/rename:title', z.string()),
+      json('title', 'title', 'codingns4dsh#terminal/rename:title', z.string()),
     ], voidResult('rename'), { agentScoped: true }),
     invocation('resize', [
       agent(),
       idParameter(),
       attachmentParameter(),
-      json('cols', 'cols', 'dsh-codingns#terminal/resize:cols', z.number()),
-      json('rows', 'rows', 'dsh-codingns#terminal/resize:rows', z.number()),
+      json('cols', 'cols', 'codingns4dsh#terminal/resize:cols', z.number()),
+      json('rows', 'rows', 'codingns4dsh#terminal/resize:rows', z.number()),
     ], voidResult('resize'), { agentScoped: true }),
     invocation('retain', [
       json('sessionId', 'sessionId', '@deepseek-ai/dsh-session/types#SessionId', sessionIdSchema),
       idParameter(),
     ], codec(
-      'dsh-codingns/shared#CodingNsTerminalRetentionFrame',
+      'codingns4dsh/shared#CodingNsTerminalRetentionFrame',
       z.object({ type: z.literal('retained').readonly() }),
     ), { cancellable: true, stream: true }),
     invocation('shells', [agent()], codec(
-      'dsh-codingns#terminal/shells:result',
+      'codingns4dsh#terminal/shells:result',
       z.array(shellSchema),
     ), { agentScoped: true, cancellable: true }),
     invocation('write', [
       agent(),
       idParameter(),
       attachmentParameter(),
-      json('data', 'data', 'dsh-codingns#terminal/write:data', z.string()),
+      json('data', 'data', 'codingns4dsh#terminal/write:data', z.string()),
     ], voidResult('write'), { agentScoped: true }),
   ],
   model: {
     services: [{
-      description: 'dsh-codingns Sidebar 终端 UI 使用的兼容 controller。',
-      summary: 'CodingNS 终端 controller',
+      description: 'codingns4dsh Sidebar 终端 UI 使用的兼容 controller。',
+      summary: 'Codingns4DSH 终端 controller',
       tags: [],
-      jsDoc: '/** dsh-codingns Sidebar 终端 UI 使用的兼容 controller。 */',
+      jsDoc: '/** codingns4dsh Sidebar 终端 UI 使用的兼容 controller。 */',
       key: 'terminalController',
       exportName: 'CodingNsTerminalController',
       members: [

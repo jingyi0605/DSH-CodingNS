@@ -7,13 +7,13 @@ const expectedMethods = [
   'rename', 'resize', 'retain', 'shells', 'write',
 ]
 
-test('终端 Typert manifest 使用 dsh-codingns 自有 package 和 invocation identity', () => {
-  assert.equal(TYPERT.package, 'dsh-codingns')
+test('终端 Typert manifest 使用 codingns4dsh 自有 package 和 invocation identity', () => {
+  assert.equal(TYPERT.package, 'codingns4dsh')
   assert.equal(TYPERT.face, 'host')
   assert.deepEqual(TYPERT.invocations.map((item) => item.method), expectedMethods)
   assert.deepEqual(
     TYPERT.invocations.map((item) => item.id),
-    expectedMethods.map((method) => `dsh-codingns#terminal/${method}`),
+    expectedMethods.map((method) => `codingns4dsh#terminal/${method}`),
   )
   assert.ok(TYPERT.invocations.every((item) => item.service === 'terminalController'))
   assert.ok(TYPERT.invocations.every((item) => item.namespace === 'terminal'))

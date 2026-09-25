@@ -13,17 +13,17 @@ const actualVersion = readRuntimeDshVersion()
 // 不能把插件作为独立 npm 包安装的能力误判为失败。
 if (actualVersion === undefined) {
   if (process.env.DSH_HOME !== undefined || process.env.DSH_PLUGIN_INSTALL === '1') {
-    throw new Error('dsh-codingns 安装失败：检测到 DSH 安装上下文，但无法读取当前 DSH 版本')
+    throw new Error('codingns4dsh 安装失败：检测到 DSH 安装上下文，但无法读取当前 DSH 版本')
   }
-  console.warn('dsh-codingns: 未检测到 DSH 宿主，跳过安装期 DSH 兼容性检查')
+  console.warn('codingns4dsh: 未检测到 DSH 宿主，跳过安装期 DSH 兼容性检查')
   process.exit(0)
 }
 
 if (typeof compatibility !== 'string' || !isCompatible(actualVersion, compatibility)) {
-  throw new Error(`dsh-codingns 安装失败：当前 DSH ${actualVersion} 不在插件支持范围 ${String(compatibility)} 内`)
+  throw new Error(`codingns4dsh 安装失败：当前 DSH ${actualVersion} 不在插件支持范围 ${String(compatibility)} 内`)
 }
 
-console.log(`dsh-codingns 安装期版本检查通过：DSH ${actualVersion}，兼容范围 ${compatibility}`)
+console.log(`codingns4dsh 安装期版本检查通过：DSH ${actualVersion}，兼容范围 ${compatibility}`)
 
 function readRuntimeDshVersion() {
   const candidates = [process.env.DSH_RUNTIME_VERSION, process.env.DSH_VERSION, readVersionFromCommand()]

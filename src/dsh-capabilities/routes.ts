@@ -2,7 +2,7 @@ import { DshCapabilityRegistry } from './registry.js'
 import type { DshCapabilityRoute, DshCapabilityRuntime } from './types.js'
 
 /**
- * 注册 CodingNS 当前实际消费的 DSH 服务能力。
+ * 注册 Codingns4DSH 当前实际消费的 DSH 服务能力。
  *
  * 探测只检查结构，不读取版本字符串；版本范围由 Registry 统一处理，避免
  * 业务模块在运行时继续堆叠 if (version >= ...)。

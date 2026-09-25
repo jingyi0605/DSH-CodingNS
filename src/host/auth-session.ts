@@ -144,7 +144,7 @@ export class CodingNsAuthSession {
   /** 为浏览器 Client 申请短期票据；access/refresh token 永远不离开 Host。 */
   async createClientSignalingTicket(tunnelDomain?: string): Promise<RelaySignalingTicketResponse> {
     const domain = tunnelDomain?.trim() || this.state.binding?.tunnelDomain
-    if (!domain) throw new Error('CodingNS 尚未绑定 Host')
+    if (!domain) throw new Error('Codingns4DSH 尚未绑定 Host')
     return this.client.createSignalingTicket(this.requireAccessToken(), { tunnelDomain: domain })
   }
 
@@ -193,7 +193,7 @@ export class CodingNsAuthSession {
   }
 
   private requireAccessToken(): string {
-    if (!this.accessToken) throw new Error('CodingNS 会话未认证')
+    if (!this.accessToken) throw new Error('Codingns4DSH 会话未认证')
     return this.accessToken
   }
 

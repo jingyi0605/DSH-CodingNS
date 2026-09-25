@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
 
-/** CodingNS 自有词典命名空间。词典缺少的语言由 DSH 自动回退到英文。 */
+/** Codingns4DSH 自有词典命名空间。词典缺少的语言由 DSH 自动回退到英文。 */
 export const CODINGNS_LOCALE_NS = 'codingns' as const
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -17,10 +17,10 @@ export type CodingNsLocale = Pick<LocaleRuntime, 'bind' | 'getSnapshot' | 'subsc
 export type CodingNsTranslator = Translate<string>
 
 const en: Record<string, string> = {
-  'common.brand': 'CodingNS',
-  'settings.title': 'CodingNS features',
+  'common.brand': 'Codingns4DSH',
+  'settings.title': 'Codingns4DSH features',
   'settings.subtitle': 'Configure modules without changing DSH global settings.',
-  'settings.version': 'DSH-CodingNS v{version}',
+  'settings.version': 'Codingns4DSH v{version}',
   'settings.compatibility': 'Compatible with DSH {range}',
   'settings.restartTarget': 'Target after restart: {state}',
   'settings.enabled': 'Enabled',
@@ -36,7 +36,7 @@ const en: Record<string, string> = {
   'feature.loginProtection.label': 'Login protection',
   'feature.loginProtection.description': 'Protect LAN and relay DSH Web access with one local account; loopback access is always allowed.',
   'feature.reverseProxy.label': 'Relay access service',
-  'feature.reverseProxy.description': 'Access a DSH Host through the isolated DSH-CodingNS relay.',
+  'feature.reverseProxy.description': 'Access a DSH Host through the isolated Codingns4DSH relay.',
   'feature.cliAdapters.label': 'External Agent integration',
   'feature.cliAdapters.description': 'View installed external Agents, versions, command paths, available models, and enable them independently.',
   'feature.workspaceSession.label': 'Workspace session enhancement',
@@ -122,7 +122,7 @@ const en: Record<string, string> = {
   'relay.hostPublicKey': 'Host public key',
   'relay.hostFingerprint': 'Host fingerprint',
   'relay.settings': 'Service settings',
-  'relay.loginHint': 'Log in to CodingNS to manage devices and the current Host.',
+  'relay.loginHint': 'Log in to Codingns4DSH to manage devices and the current Host.',
   'relay.addServer': 'Add relay server',
   'relay.addServerHint': 'Enter a new Control API address.',
   'relay.login': 'Log in',
@@ -145,7 +145,7 @@ const en: Record<string, string> = {
   'relay.host': 'Host: {value}',
   'relay.devicesSummary': 'Current device {current}; other active devices: {count}',
   'relay.deviceStatus': 'Device status: {value}',
-  'relay.dshDevices': 'DSH-CodingNS devices',
+  'relay.dshDevices': 'Codingns4DSH devices',
   'relay.selectDevice': 'Select a DSH Host',
   'relay.online': 'online',
   'relay.offline': 'offline',
@@ -216,10 +216,10 @@ const en: Record<string, string> = {
 }
 
 const zh: Record<string, string> = {
-  'common.brand': 'CodingNS',
-  'settings.title': 'CodingNS 功能模块',
-  'settings.subtitle': '按模块配置 CodingNS 功能，不影响 DSH 的全局设置。',
-  'settings.version': 'DSH-CodingNS v{version}',
+  'common.brand': 'Codingns4DSH',
+  'settings.title': 'Codingns4DSH 功能模块',
+  'settings.subtitle': '按模块配置 Codingns4DSH 功能，不影响 DSH 的全局设置。',
+  'settings.version': 'Codingns4DSH v{version}',
   'settings.compatibility': '兼容 DSH {range}',
   'settings.restartTarget': '下次启动目标：{state}',
   'settings.enabled': '启用',
@@ -235,7 +235,7 @@ const zh: Record<string, string> = {
   'feature.loginProtection.label': '登录保护',
   'feature.loginProtection.description': '使用统一的本地账号保护局域网和中继 DSH Web 访问，本机回环地址始终放行。',
   'feature.reverseProxy.label': '中转访问服务',
-  'feature.reverseProxy.description': '通过隔离的 DSH-CodingNS 中继访问 DSH Host。',
+  'feature.reverseProxy.description': '通过隔离的 Codingns4DSH 中继访问 DSH Host。',
   'feature.cliAdapters.label': '外部Agent集成',
   'feature.cliAdapters.description': '查看外部 Agent 的安装状态、版本、命令路径和可用模型，并单独启用或停用。',
   'feature.workspaceSession.label': '工作区会话增强',
@@ -321,7 +321,7 @@ const zh: Record<string, string> = {
   'relay.hostPublicKey': 'Host 公钥',
   'relay.hostFingerprint': 'Host 指纹',
   'relay.settings': '服务设置',
-  'relay.loginHint': '登录 CodingNS，管理设备和当前 Host。',
+  'relay.loginHint': '登录 Codingns4DSH，管理设备和当前 Host。',
   'relay.addServer': '添加中转服务器',
   'relay.addServerHint': '请输入新的 Control API 地址。',
   'relay.login': '登录',
@@ -344,7 +344,7 @@ const zh: Record<string, string> = {
   'relay.host': 'Host：{value}',
   'relay.devicesSummary': '当前设备 {current}，其他活动设备 {count} 台',
   'relay.deviceStatus': '设备状态：{value}',
-  'relay.dshDevices': 'DSH-CodingNS 设备',
+  'relay.dshDevices': 'Codingns4DSH 设备',
   'relay.selectDevice': '选择 DSH Host',
   'relay.online': '在线',
   'relay.offline': '离线',
@@ -419,7 +419,7 @@ export function registerCodingNsLocale(ctx: Context): () => void {
   return ctx.locale.register(CODINGNS_LOCALE_NS, { en, zh })
 }
 
-/** 订阅 DSH 语言修订，并返回当前 CodingNS 命名空间翻译函数。 */
+/** 订阅 DSH 语言修订，并返回当前 Codingns4DSH 命名空间翻译函数。 */
 export function useCodingNsTranslator(locale: CodingNsLocale): CodingNsTranslator {
   const getRevision = (): number => locale.getSnapshot().revision
   const subscribe = (listener: () => void): (() => void) => locale.subscribe(listener)

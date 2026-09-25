@@ -4,7 +4,7 @@ import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
 const XTERM_CSS_ID = '@xterm/xterm/css/xterm.css'
-const XTERM_CSS_VIRTUAL_ID = '\0dsh-codingns:xterm-css'
+const XTERM_CSS_VIRTUAL_ID = '\0codingns4dsh:xterm-css'
 
 export default defineConfig({
   entry: { index: 'src/client/index.ts' },
@@ -23,7 +23,7 @@ export default defineConfig({
   external: ['react', '@deepseek-ai/dsh-client-ui-primitives'],
   noExternal: (specifier) => specifier !== 'react' && specifier !== '@deepseek-ai/dsh-client-ui-primitives',
   plugins: [{
-    name: 'dsh-codingns:xterm-css-text',
+    name: 'codingns4dsh:xterm-css-text',
     enforce: 'pre',
     resolveId(source) {
       return source === XTERM_CSS_ID ? XTERM_CSS_VIRTUAL_ID : null
@@ -39,7 +39,7 @@ export default defineConfig({
     codeSplitting: false,
     // 与 tsc 的 data/build/dist/client/index.js 分离，避免两个监听进程互相覆盖产物。
     entryFileNames: 'bundle.js',
-    banner: 'window.__ModuleLoader__.load({ id: "dsh-codingns", factory: (require) => {',
+    banner: 'window.__ModuleLoader__.load({ id: "codingns4dsh", factory: (require) => {',
     footer: 'return module.exports; } });',
     intro: 'var module = { exports: {} }; var exports = module.exports;',
   },

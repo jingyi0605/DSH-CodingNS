@@ -32,7 +32,7 @@ import { useCodingNsTranslator } from './locale.js'
 import { CODINGNS_VERSION, DSH_COMPATIBILITY, isLegacyDshVersion } from '../shared/contracts/version.js'
 import type { CodingNsSettingsSnapshot, CodingNsSettingsStore } from '../dsh-capabilities/settings-store.js'
 
-const CODINGNS_GITHUB_URL = 'https://github.com/jingyi0605/DSH-CodingNS'
+const CODINGNS_GITHUB_URL = 'https://github.com/jingyi0605/Codingns4DSH'
 
 // pnpm 会为不同 peer 上下文保留独立的 ui-slots 类型实例；插件在自己实际使用的
 // 根实例上重申公开契约，避免依赖声明合并偶然穿过依赖副本。
@@ -55,7 +55,7 @@ export interface CodingNsSectionProps extends PropsRuntime<'settings.section'> {
 }
 
 /**
- * DSH 设置页中的 CodingNS 区块。
+ * DSH 设置页中的 Codingns4DSH 区块。
  *
  * 它只做一件事：遍历注册表中带界面描述的模块并渲染卡片。卡片内容来自模块
  * 自己的 settingsPanel，所以新增模块不会在这里产生分支。

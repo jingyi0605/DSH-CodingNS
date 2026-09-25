@@ -18,7 +18,7 @@ export interface DshTransportDebugOptions {
   readonly sink?: (record: Readonly<Record<string, unknown>>) => void
 }
 
-const DEBUG_ENV = 'DSH_CODINGNS_TUNNEL_DEBUG'
+const DEBUG_ENV = 'CODINGNS4DSH_TUNNEL_DEBUG'
 
 /** 创建一个可注入测试 sink 的调试 logger。默认开关由当前运行环境决定。 */
 export function createDshTransportDebugLogger(options: DshTransportDebugOptions = {}): DshTransportDebugLogger {
@@ -27,7 +27,7 @@ export function createDshTransportDebugLogger(options: DshTransportDebugOptions 
   const component = options.component ?? 'transport'
   const sink = options.sink ?? ((record) => {
     // console.info 在 Node 和浏览器中都能稳定显示，并且不会把正文拼进字符串。
-    console.info('[dsh-codingns:tunnel]', record)
+    console.info('[codingns4dsh:tunnel]', record)
   })
   return {
     enabled,
@@ -46,7 +46,7 @@ export function createDshTransportDebugLogger(options: DshTransportDebugOptions 
 
 /** 解析 Host 环境变量、H5 URL/localStorage 和调试全局变量。 */
 export function resolveDshTransportDebugEnabled(): boolean {
-  const globalValue = (globalThis as typeof globalThis & { __DSH_CODINGNS_TUNNEL_DEBUG__?: unknown }).__DSH_CODINGNS_TUNNEL_DEBUG__
+  const globalValue = (globalThis as typeof globalThis & { __CODINGNS4DSH_TUNNEL_DEBUG__?: unknown }).__CODINGNS4DSH_TUNNEL_DEBUG__
   if (globalValue !== undefined) return parseDebugValue(globalValue)
 
   if (typeof location !== 'undefined') {
@@ -56,7 +56,7 @@ export function resolveDshTransportDebugEnabled(): boolean {
 
   if (typeof localStorage !== 'undefined') {
     try {
-      const stored = localStorage.getItem('dsh-codingns-tunnel-debug')
+      const stored = localStorage.getItem('codingns4dsh-tunnel-debug')
       if (stored !== null) return parseDebugValue(stored)
     } catch {
       // 隐私模式或受限 iframe 可能禁止读取 localStorage，继续检查其他来源。

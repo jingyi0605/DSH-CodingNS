@@ -31,7 +31,7 @@ const settingsValue = (enabled: boolean) => ({
 })
 
 test('Host ID 和终端映射路径在同一 DSH Profile 下保持稳定', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'dsh-codingns-startup-'))
+  const directory = await mkdtemp(join(tmpdir(), 'codingns4dsh-startup-'))
   try {
     const settingsPath = join(directory, 'settings.json')
     const first = await resolveTerminalStartupIdentity(
@@ -43,7 +43,7 @@ test('Host ID 和终端映射路径在同一 DSH Profile 下保持稳定', async
       () => 'local-22222222-2222-4222-8222-222222222222',
     )
     assert.deepEqual(second, first)
-    assert.equal(first.storeFilename, join(directory, 'dsh-codingns', 'terminals.json'))
+    assert.equal(first.storeFilename, join(directory, 'codingns4dsh', 'terminals.json'))
     assert.equal(await readFile(first.hostIdFilename, 'utf8'), `${first.hostId}\n`)
   } finally {
     await rm(directory, { recursive: true, force: true })
@@ -86,8 +86,8 @@ test('强化模式把稳定 Host、store、workspace 和 attachment generation �
       platform: 'linux',
       resolveIdentity: async () => ({
         hostId: 'local-11111111-1111-4111-8111-111111111111',
-        storeFilename: '/profile/dsh-codingns/terminals.json',
-        hostIdFilename: '/profile/dsh-codingns/host-id',
+        storeFilename: '/profile/codingns4dsh/terminals.json',
+        hostIdFilename: '/profile/codingns4dsh/host-id',
       }),
       createController: (async (_ctx, options) => {
         captured = options
@@ -98,7 +98,7 @@ test('强化模式把稳定 Host、store、workspace 和 attachment generation �
   assert.equal(result.mode, 'enhanced')
   assert.equal(captured.enhancedEnabled, true)
   assert.equal(captured.hostId, 'local-11111111-1111-4111-8111-111111111111')
-  assert.equal(captured.storeFilename, '/profile/dsh-codingns/terminals.json')
+  assert.equal(captured.storeFilename, '/profile/codingns4dsh/terminals.json')
   assert.equal(captured.platform, 'linux')
   assert.equal(
     captured.generation({ id: 'session-a' }, 'attach-a'),

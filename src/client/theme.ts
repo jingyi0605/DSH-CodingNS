@@ -45,7 +45,7 @@ export const dshButtonStyle: CSSProperties = {
   border: `1px solid ${dshThemeColor.border}`,
 }
 
-/** CodingNS 设置页共享外壳：保持紧凑宽度，避免挤压宿主设置导航。 */
+/** Codingns4DSH 设置页共享外壳：保持紧凑宽度，避免挤压宿主设置导航。 */
 export const dshSettingsPageStyle: CSSProperties = {
   ...dshFormRootStyle,
   display: 'flex',

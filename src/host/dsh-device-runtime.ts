@@ -53,7 +53,7 @@ export interface DshHostDeviceRuntime {
 
 /**
  * 注册一个独立的 DSH 设备并启动 Host Relay runtime。
- * 这里不读取或写入 CodingNS binding，设备凭据也与 refresh token 分文件保存。
+ * 这里不读取或写入 Codingns4DSH binding，设备凭据也与 refresh token 分文件保存。
  */
 export async function startDshHostDeviceRuntime(options: DshHostDeviceRuntimeOptions): Promise<DshHostDeviceRuntime> {
   if (!options.accessToken.trim()) throw new TypeError('DSH Host accessToken 不能为空')
@@ -166,5 +166,5 @@ async function requestDshTicket(
   }
 }
 
-function defaultDshCredentialPath(): string { return join(homedir(), '.config', 'dsh-codingns', 'device-credential.json') }
-function defaultDtlsPath(): string { return join(homedir(), '.config', 'dsh-codingns', 'dtls-identity.json') }
+function defaultDshCredentialPath(): string { return join(homedir(), '.config', 'codingns4dsh', 'device-credential.json') }
+function defaultDtlsPath(): string { return join(homedir(), '.config', 'codingns4dsh', 'dtls-identity.json') }

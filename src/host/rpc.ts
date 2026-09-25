@@ -6,7 +6,7 @@ import { CODINGNS_SETTINGS_NAMESPACE, type CodingNsSettings } from '../shared/co
 import { CodingNsRpcError, type CodingNsRpcHandler, type CodingNsRpcTable } from './rpc-table.js'
 
 /**
- * 创建 CodingNS Host RPC 主处理器。
+ * 创建 Codingns4DSH Host RPC 主处理器。
  *
  * 它只做一次 `namespace/action` 前缀解析，具体动作由各功能模块在启动时登记的
  * 命名空间处理器实现；新增模块不需要修改这个文件。这是浏览器表单与 Host 能力
@@ -17,7 +17,7 @@ export function createCodingNsRpcHandler(table: CodingNsRpcTable): ConnectionRpc
   return async (endpoint, payload, signal) => {
     const target = table.resolve(endpoint)
     if (target === null) {
-      return failure('CODINGNS_RPC_NOT_FOUND', `未知 CodingNS RPC: ${endpoint}`)
+      return failure('CODINGNS_RPC_NOT_FOUND', `未知 Codingns4DSH RPC: ${endpoint}`)
     }
     try {
       return success(await target.handler(target.action, payload, { signal }))
@@ -27,7 +27,7 @@ export function createCodingNsRpcHandler(table: CodingNsRpcTable): ConnectionRpc
   }
 }
 
-/** 在当前 Connection 上挂载 CodingNS RPC 主处理器；注销由调用方的 effect 负责。 */
+/** 在当前 Connection 上挂载 Codingns4DSH RPC 主处理器；注销由调用方的 effect 负责。 */
 export function registerCodingNsRpc(ctx: Context, table: CodingNsRpcTable, settingsProvider?: SettingsProvider): void {
   // 连接服务的 rpc.handle 内部会把路由注册延迟到另一个 effect；该 effect 的 owner
   // 不携带本插件的 webServer 注入，在部分 DSH 版本中会直接失败。因此这里捕获已经
@@ -59,7 +59,7 @@ export function registerCodingNsRpc(ctx: Context, table: CodingNsRpcTable, setti
         unregisterSettings?.()
       }
     },
-    'dsh-codingns: Host RPC',
+    'codingns4dsh: Host RPC',
   )
 }
 
@@ -165,7 +165,7 @@ const CODINGNS_RPC_ENDPOINTS = [
   'cli/catalog', 'cli/models', 'cli/adapter/set', 'cli/session/get', 'cli/session/set', 'cli/session/list', 'cli/session/adapter-map', 'cli/session/archive', 'cli/session/steer', 'cli/session/follow-up', 'cli/session/interrupt', 'cli/subscription',
 ] as const
 
-/** 创建远程设置处理器；只允许 CodingNS 自己的 namespace 和路径编辑。 */
+/** 创建远程设置处理器；只允许 Codingns4DSH 自己的 namespace 和路径编辑。 */
 export function createCodingNsSettingsRpcHandler(provider: SettingsProvider): CodingNsRpcHandler {
   return async (action, payload) => {
     if (action === 'get') return readCodingNsSettings(provider)
@@ -175,13 +175,13 @@ export function createCodingNsSettingsRpcHandler(provider: SettingsProvider): Co
       await provider.mutate(CODINGNS_SETTINGS_NAMESPACE, input.ops, input.expectedRevision)
       return readCodingNsSettings(provider)
     }
-    throw new CodingNsRpcError('CODINGNS_RPC_NOT_FOUND', `未知 CodingNS RPC: settings/${action}`)
+    throw new CodingNsRpcError('CODINGNS_RPC_NOT_FOUND', `未知 Codingns4DSH RPC: settings/${action}`)
   }
 }
 
 function readCodingNsSettings(provider: SettingsProvider): { value: CodingNsSettings; revision: number } {
   const descriptor = provider.describe({ redactSecrets: true }).find((item) => item.ns === CODINGNS_SETTINGS_NAMESPACE)
-  if (descriptor === undefined) throw new CodingNsRpcError('CODINGNS_SETTINGS_UNAVAILABLE', 'CodingNS 设置尚未注册')
+  if (descriptor === undefined) throw new CodingNsRpcError('CODINGNS_SETTINGS_UNAVAILABLE', 'Codingns4DSH 设置尚未注册')
   const value = provider.get(CODINGNS_SETTINGS_NAMESPACE) as CodingNsSettings
   // cliSessions 是 Host-only 索引，包含 providerSessionId/rawStoreRef，不能通过设置 RPC
   // 暴露给浏览器。外部会话列表必须走 cli/session/list，由 Host 按需返回摘要。

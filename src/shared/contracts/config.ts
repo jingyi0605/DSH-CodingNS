@@ -8,7 +8,7 @@ export interface CodingNsCliAdapterPreference {
   readonly effortId?: string | undefined
 }
 
-/** CodingNS 在 DSH 设置文档中持久化的用户选项。 */
+/** Codingns4DSH 在 DSH 设置文档中持久化的用户选项。 */
 export interface CodingNsSettings {
   /** Control API 地址不是秘密，可以由 Web 设置页保存到 Host 设置。 */
   controlBaseUrl: string
@@ -91,7 +91,7 @@ export interface LanAccessDshSettings {
 export interface LoginProtectionScopes {
   /** 局域网网卡入口。 */
   lan: boolean
-  /** DSH-CodingNS 中继入口。 */
+  /** Codingns4DSH 中继入口。 */
   relay: boolean
 }
 
@@ -113,7 +113,7 @@ export const CODINGNS_TERMINAL_ENHANCEMENT_FIELD = 'terminalEnhancement'
 export const CODINGNS_WORKSPACE_SESSION_ENHANCEMENT_FIELD = 'workspaceSessionEnhancement'
 export const DEFAULT_CODINGNS_CONTROL_BASE_URL = 'https://channel.codingns.com:1443'
 export const DEFAULT_CODINGNS_CONTROL_BASE_URLS = [DEFAULT_CODINGNS_CONTROL_BASE_URL]
-/** 控制站的网页登录地址，用于注册 CodingNS 账号。 */
+/** 控制站的网页登录地址，用于注册 Codingns4DSH 账号。 */
 export const CODINGNS_CONTROL_STATION_URL = 'https://channel.codingns.com:1443'
 /** 独立 H5 登录页面地址；登录控制站后可从设置页复制给其他设备。 */
 export const CODINGNS_H5_LOGIN_URL = 'https://dsh.codingns.com'

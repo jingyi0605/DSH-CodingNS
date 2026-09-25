@@ -1,4 +1,4 @@
-/** CodingNS Relay Tunnel 二进制线协议（与父仓库 relay-tunnel-wire 一致）。 */
+/** Codingns4DSH Relay Tunnel 二进制线协议（与父仓库 relay-tunnel-wire 一致）。 */
 import { decodeDshEnvelope } from './dsh-envelope.js'
 export const TUNNEL_WIRE_VERSION = 1
 export const TUNNEL_PROTOCOL_VERSION = TUNNEL_WIRE_VERSION
