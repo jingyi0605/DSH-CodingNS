@@ -307,6 +307,15 @@ export class LanAccessDshProxy {
 
   private authorize(request: ParsedLanRequest, localAddress: boolean): Uint8Array | 'pass' {
     const config = this.loginConfig
+    if (request.path === '/__codingns/session' && request.method === 'GET') {
+      const token = readCookie(request.headers.cookie, 'dsh_codingns_session')
+      const authenticated = !localAddress && config !== null && config.enabled && config.scopes.lan
+        && token !== undefined && !this.revokedSessions.has(token)
+        && verifySignedSessionToken(token, config, 'lan')
+      return loginJsonResponse(200, authenticated
+        ? { authenticated: true, username: config.username }
+        : { authenticated: false })
+    }
     if (localAddress || config === null || !config.enabled || !config.scopes.lan) return 'pass'
     if (request.path === '/__codingns/login' && request.method === 'POST') {
       const form = new URLSearchParams(new TextDecoder().decode(request.body))
@@ -430,7 +439,8 @@ function getSetCookie(headers: Headers): string | undefined {
 
 function loginResponse(status: number, body: string, extra: Record<string, string> = {}): Uint8Array {
   const isHtml = body.startsWith('<!doctype html>')
-  const content = new TextEncoder().encode(isHtml ? body : escapeHtml(body))
+  const isJson = extra['Content-Type']?.startsWith('application/json') === true
+  const content = new TextEncoder().encode(isHtml || isJson ? body : escapeHtml(body))
   const headers = {
     'Content-Type': isHtml ? 'text/html; charset=utf-8' : 'text/plain; charset=utf-8',
     'Content-Length': String(content.length),
@@ -444,6 +454,10 @@ function loginResponse(status: number, body: string, extra: Record<string, strin
   }
   const head = encodeLatin1(`HTTP/1.1 ${status} ${statusText(status)}\r\n${Object.entries(headers).map(([key, value]) => `${key}: ${value}`).join('\r\n')}\r\n\r\n`)
   return concatBytes(head, content)
+}
+
+function loginJsonResponse(status: number, value: unknown): Uint8Array {
+  return loginResponse(status, JSON.stringify(value), { 'Content-Type': 'application/json; charset=utf-8' })
 }
 
 function loginPage(): string {

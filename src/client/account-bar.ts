@@ -4,16 +4,22 @@ import type { DshHostStatus } from '../shared/contracts/host-status.js'
 import { CODINGNS_RPC_CHANNEL } from '../shared/contracts/transport.js'
 import type { CodingNsRpcClient } from './features/types.js'
 import type { CodingNsSettingsStore } from '../dsh-capabilities/settings-store.js'
+import { LOGIN_PROTECTION_SESSION_EVENT, readLoginProtectionSession, writeLoginProtectionSession } from './features/login-protection-session.js'
 
 const SETTINGS_BUTTON_SELECTOR = 'button[aria-label="设置"]'
 const ACCOUNT_ATTRIBUTE = 'data-codingns-account-button'
 const MENU_ATTRIBUTE = 'data-codingns-account-menu'
 const POLL_MS = 5_000
 
+interface LocalIdentity { username: string }
+type ActiveAccount =
+  | { kind: 'codingns'; identity: string }
+  | { kind: 'local'; identity: string; scope: 'lan' | 'relay' }
+
 export interface AccountBarController { dispose(): void }
 
 /** 在 DSH 设置触发器旁挂载统一账户入口，兼容侧栏横排与收起竖排。 */
-export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, settings?: CodingNsSettingsStore<CodingNsSettings>): AccountBarController {
+export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, _settings?: CodingNsSettingsStore<CodingNsSettings>): AccountBarController {
   const currentDocument = dom ?? (typeof document === 'undefined' ? undefined : document)
   if (currentDocument === undefined) return { dispose() {} }
   const root = currentDocument
@@ -26,8 +32,8 @@ export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, 
   let rendering = false
   let closeMenuListener: ((event: MouseEvent) => void) | undefined
   let auth: CodingNsAuthSessionSnapshot = loggedOutSnapshot()
-  let local: LocalIdentity = { username: '', enabled: false }
-  let relayAccessEnabled = false
+  let local: LocalIdentity | null = null
+  let localRelay: LocalIdentity | null = readRelayLoginIdentity()
   let status: DshHostStatus | undefined
   let latency: number | undefined
   let busy = false
@@ -50,12 +56,12 @@ export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, 
     const started = performance.now()
     const [nextAuth, nextLocal, nextStatus] = await Promise.allSettled([
       call<CodingNsAuthSessionSnapshot>('auth/snapshot', {}),
-      call<LocalIdentity>('lanAccessDsh/login/get', {}),
+      fetchLocalIdentity(root),
       call<DshHostStatus>('host/status', {}),
     ])
     if (nextAuth.status === 'fulfilled') auth = nextAuth.value
-    if (nextLocal.status === 'fulfilled') local = nextLocal.value
-    relayAccessEnabled = settings?.getSnapshot().value?.modules?.reverseProxy === true
+    local = nextLocal.status === 'fulfilled' ? nextLocal.value : null
+    localRelay = readRelayLoginIdentity()
     if (nextStatus.status === 'fulfilled') {
       status = nextStatus.value
       latency = Math.max(0, Math.round(performance.now() - started))
@@ -71,7 +77,7 @@ export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, 
 
   const scan = (): void => {
     if (disposed) return
-    if (!local.enabled && !relayAccessEnabled) {
+    if (!isAccountAuthenticated()) {
       removeAccountBar()
       observeDom = true
       return
@@ -103,6 +109,8 @@ export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, 
       display: 'flex',
       alignItems: 'center',
       gap: '4px',
+      width: '100%',
+      boxSizing: 'border-box',
     })
     updateAccountLayout(parent, settings, button)
     resizeObserver?.disconnect()
@@ -121,7 +129,8 @@ export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, 
     if (button.dataset.codingnsWide === mode) return
     button.dataset.codingnsWide = mode
     parent.style.flexDirection = wide ? 'row' : 'column'
-    parent.style.justifyContent = wide ? 'flex-start' : 'flex-end'
+    parent.style.justifyContent = 'flex-end'
+    button.style.marginLeft = wide ? 'auto' : '0'
     button.style.order = wide ? '2' : '1'
     settings.style.order = wide ? '1' : '2'
   }
@@ -153,10 +162,11 @@ export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, 
   }
   observer = typeof MutationObserver === 'undefined' ? undefined : new MutationObserver(observerCallback)
   observer?.observe(root.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-expanded'] })
-  const unsubscribeSettings = settings?.subscribe(() => {
-    relayAccessEnabled = settings.getSnapshot().value?.modules?.reverseProxy === true
+  const onLoginProtectionSessionChanged = (): void => {
+    localRelay = readRelayLoginIdentity()
     renderAll()
-  })
+  }
+  root.defaultView?.addEventListener(LOGIN_PROTECTION_SESSION_EVENT, onLoginProtectionSessionChanged)
   timer = setInterval(() => { void refresh() }, POLL_MS)
   void refresh()
 
@@ -165,9 +175,9 @@ export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, 
       if (disposed) return
       disposed = true
       if (timer !== undefined) clearInterval(timer)
-      unsubscribeSettings?.()
       observer?.disconnect()
       resizeObserver?.disconnect()
+      root.defaultView?.removeEventListener(LOGIN_PROTECTION_SESSION_EVENT, onLoginProtectionSessionChanged)
       if (closeMenuListener !== undefined) {
         root.removeEventListener('click', closeMenuListener, true)
         closeMenuListener = undefined
@@ -187,18 +197,34 @@ export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, 
   }
 
   function renderButton(button: HTMLButtonElement): void {
-    const identity = auth.account !== null
-      ? auth.account.email
-      : auth.status === 'authenticated' ? 'Codingns4DSH'
-      : local.enabled && local.username ? local.username : '用户'
+    const account = activeAccount()
+    const identity = account?.identity ?? '用户'
     button.title = `${identity} · 点击管理登录`
     button.setAttribute('aria-label', `用户：${identity}`)
-    const authKind = auth.account !== null || auth.status === 'authenticated' ? 'codingns' : local.enabled ? 'local' : 'unknown'
-    button.dataset.codingnsAuth = authKind
+    button.dataset.codingnsAuth = account?.kind ?? 'unknown'
     const statusDot = button.querySelector<HTMLElement>('[data-codingns-account-status]')
-    if (statusDot !== null) statusDot.style.background = authKind === 'unknown'
-      ? 'var(--dsw-alias-label-tertiary, #8b8d91)'
-      : 'var(--dsw-alias-state-success-primary, #35b66b)'
+    if (statusDot !== null) statusDot.style.background = 'var(--dsw-alias-state-success-primary, #35b66b)'
+  }
+
+  function activeAccount(): ActiveAccount | null {
+    const remote = isRemoteContext()
+    if (isLoopbackPage() && !remote) return null
+    if (local !== null) return { kind: 'local', identity: local.username, scope: 'lan' }
+    if (!remote) return null
+    if (auth.status === 'authenticated' && auth.account !== null) {
+      return { kind: 'codingns', identity: auth.account.email }
+    }
+    if (localRelay !== null) return { kind: 'local', identity: localRelay.username, scope: 'relay' }
+    return null
+  }
+
+  function isAccountAuthenticated(): boolean {
+    return activeAccount() !== null
+  }
+
+  function isLoopbackPage(): boolean {
+    const hostname = root.defaultView?.location.hostname.toLowerCase().replace(/\.$/u, '').replace(/^\[|\]$/gu, '') ?? ''
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '::ffff:127.0.0.1'
   }
 
   function toggleMenu(button: HTMLButtonElement): void {
@@ -248,10 +274,10 @@ export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, 
   }
 
   function renderMenu(menu: HTMLElement): void {
-    const identity = auth.account !== null
-      ? auth.account.email
-      : auth.status === 'authenticated' ? 'Codingns4DSH 账号'
-      : local.enabled && local.username ? `${local.username}（本地账号）` : '未识别账号'
+    const account = activeAccount()
+    const identity = account?.kind === 'codingns' ? account.identity
+      : account !== null ? `${account.identity}（本地账号）`
+      : '未识别账号'
     const access = relayModeLabel()
     menu.innerHTML = ''
     menu.append(textNode(root, identity, 'strong'))
@@ -274,10 +300,16 @@ export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, 
     busy = true
     renderMenu(menu)
     try {
-      // 注销目标由当前访问入口决定；LAN 页面上的 Host 可能仍保留中继站
-      // 会话，但不能因为注销本地登录而一并清掉它。
-      if (resolveAccountLogoutTarget() === 'relay') await call('auth/logout', {})
-      else await fetch('/__codingns/logout', { credentials: 'include', redirect: 'manual' })
+      const account = activeAccount()
+      if (account?.kind === 'codingns') {
+        if (!isRemoteContext() || typeof window === 'undefined' || window.parent === window) {
+          throw new Error('Codingns Connect 账号只能从远程访问页面注销')
+        }
+        window.parent.postMessage({ kind: 'codingns4dsh:remote-logout' }, window.location.origin)
+        return
+      } else if (account?.scope === 'relay') writeLoginProtectionSession(undefined)
+      else if (account?.scope === 'lan') await fetch('/__codingns/logout', { credentials: 'include', redirect: 'manual' })
+      else throw new Error('当前页面没有可注销的账号会话')
       if (typeof location !== 'undefined') location.reload()
     } catch (error) {
       console.error('codingns4dsh: 用户注销失败', error)
@@ -287,7 +319,35 @@ export function startCodingNsAccountBar(rpc: CodingNsRpcClient, dom?: Document, 
   }
 }
 
-interface LocalIdentity { enabled: boolean; username: string }
+async function fetchLocalIdentity(dom: Document): Promise<{ username: string } | null> {
+  const response = await (dom.defaultView?.fetch.bind(dom.defaultView) ?? fetch)('/__codingns/session', {
+    credentials: 'same-origin',
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
+  if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) return null
+  const value = await response.json() as { authenticated?: unknown; username?: unknown }
+  return value.authenticated === true && typeof value.username === 'string'
+    ? { username: value.username }
+    : null
+}
+
+function readRelayLoginIdentity(): LocalIdentity | null {
+  const token = readLoginProtectionSession()
+  if (token === undefined) return null
+  try {
+    const encoded = token.split('.', 1)[0]
+    if (encoded === undefined) return null
+    const padded = encoded.replace(/-/gu, '+').replace(/_/gu, '/')
+    const binary = atob(padded.padEnd(Math.ceil(padded.length / 4) * 4, '='))
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+    const payload = JSON.parse(new TextDecoder().decode(bytes)) as { username?: unknown; scope?: unknown; expiresAt?: unknown }
+    if (payload.scope !== 'relay' || typeof payload.username !== 'string' || typeof payload.expiresAt !== 'number' || payload.expiresAt <= Date.now()) return null
+    return { username: payload.username }
+  } catch {
+    return null
+  }
+}
 
 function createAccountButton(dom: Document): HTMLButtonElement {
   const button = dom.createElement('button')
@@ -381,11 +441,6 @@ function isWide(parent: HTMLElement, settings: HTMLElement): boolean { return pa
 function formatPercent(value: number): string { return `${Math.round(value)}%` }
 function formatBytes(value: number): string { if (value < 1024 ** 3) return `${Math.round(value / 1024 ** 2)} MB`; return `${(value / 1024 ** 3).toFixed(1)} GB` }
 function isRemoteContext(): boolean { return (globalThis as { __CODINGNS4DSH_REMOTE_WEB_CONTEXT__?: unknown }).__CODINGNS4DSH_REMOTE_WEB_CONTEXT__ === true }
-function resolveAccountLogoutTarget(): 'local' | 'relay' {
-  if (isRemoteContext()) return 'relay'
-  if (typeof location !== 'undefined' && location.hostname.replace(/\.$/u, '').toLowerCase() === 'dsh.codingns.com') return 'relay'
-  return 'local'
-}
 function relayModeLabel(): string {
   const state = globalThis as { __CODINGNS4DSH_RELAY_MODE__?: 'direct' | 'relay' }
   if (state.__CODINGNS4DSH_RELAY_MODE__ === 'relay') return '中转'
