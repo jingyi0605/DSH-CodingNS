@@ -6,6 +6,8 @@ import type {
   GitBranchItem,
   GitBranchSnapshot,
   GitChangeItem,
+  GitCommitChangedFile,
+  GitCommitDiff,
   GitCommitResult,
   GitDiff,
   GitHistoryItem,
@@ -44,9 +46,14 @@ export function createGitManagementFeature(): FeatureModule<CodingNsHostServices
           case 'unstage': return mutateTargets(workspaceId, root, input.targets, 'reset')
           case 'discard': return discardTargets(workspaceId, root, input.targets)
           case 'commit': return commit(workspaceId, root, requiredString(input.subject, 'subject'))
+          case 'commit-diff': return readCommitDiff(root, requiredString(input.commitHash, 'commitHash'))
           case 'history': return readHistory(workspaceId, root, input.limit)
           case 'branches': return readBranches(root)
           case 'switch': return switchBranch(root, requiredString(input.branchName, 'branchName'), input.create === true)
+          case 'fetch': return syncRemote(workspaceId, root, ['fetch', '--all', '--prune'])
+          case 'pull': return syncRemote(workspaceId, root, ['pull', '--ff-only'])
+          case 'push': return syncRemote(workspaceId, root, ['push'])
+          case 'undo': return undoLastCommit(workspaceId, root)
           default: throw new CodingNsRpcError('CODINGNS_RPC_NOT_FOUND', `未知 Git RPC: git/${action}`)
         }
       }))
@@ -143,6 +150,50 @@ async function commit(workspaceId: string, root: string, subject: string): Promi
   return { commitHash: hash, summary: result.stdout.trim() || `已提交 ${hash.slice(0, 8)}`, status: await readStatus(workspaceId, root) }
 }
 
+async function readCommitDiff(root: string, rawCommitHash: string): Promise<GitCommitDiff> {
+  const commitHash = rawCommitHash.trim()
+  if (!/^[0-9a-f]{7,40}$/iu.test(commitHash)) throw new TypeError('commitHash 无效')
+  const [result, filesResult] = await Promise.all([
+    runGit(root, ['-c', 'core.quotePath=false', 'show', '--format=', '--binary', '--no-ext-diff', '-M', commitHash, '--']),
+    runGit(root, ['-c', 'core.quotePath=false', 'show', '--format=', '--name-status', '-M', commitHash, '--']),
+  ])
+  const content = result.stdout.slice(0, MAX_DIFF_BYTES)
+  return { commitHash, files: parseCommitChangedFiles(filesResult.stdout, result.stdout), content, truncated: result.stdout.length > content.length }
+}
+
+function parseCommitChangedFiles(value: string, diffContent: string): readonly GitCommitChangedFile[] {
+  const binaryPaths = new Set<string>()
+  for (const line of diffContent.split(/\r?\n/u)) {
+    const match = /^Binary files .* and .* differ$/u.exec(line)
+    if (match !== null) {
+      const paths = line.match(/(?:a|b)\/([^\s]+?)(?: differ)?$/u)
+      if (paths?.[1] !== undefined) binaryPaths.add(paths[1])
+    }
+  }
+  return value.split(/\r?\n/u).flatMap((line) => {
+    const fields = line.split('\t')
+    const statusToken = fields[0]?.trim() ?? ''
+    if (statusToken === '' || fields.length < 2) return []
+    const status = statusToken[0] ?? '?'
+    const renamed = status === 'R' || status === 'C'
+    const oldPath = renamed ? fields[1] ?? null : null
+    const path = (renamed ? fields[2] : fields[1])?.trim() ?? ''
+    if (path === '') return []
+    return [{ path, oldPath, status, binary: binaryPaths.has(path) }]
+  })
+}
+
+async function syncRemote(workspaceId: string, root: string, args: readonly string[]): Promise<GitStatus> {
+  await runGit(root, args)
+  return readStatus(workspaceId, root)
+}
+
+async function undoLastCommit(workspaceId: string, root: string): Promise<GitStatus> {
+  await runGit(root, ['rev-parse', '--verify', 'HEAD'])
+  await runGit(root, ['reset', '--soft', 'HEAD~1'])
+  return readStatus(workspaceId, root)
+}
+
 async function readHistory(_workspaceId: string, root: string, rawLimit: unknown): Promise<GitHistoryPage> {
   const limit = Math.max(1, Math.min(100, Number.isSafeInteger(rawLimit) ? Number(rawLimit) : 20))
   let result: { stdout: string; stderr: string }
@@ -169,13 +220,18 @@ async function readHistory(_workspaceId: string, root: string, rawLimit: unknown
 
 async function readBranches(root: string): Promise<GitBranchSnapshot> {
   const currentBranch = (await runGit(root, ['branch', '--show-current'])).stdout.trim() || 'HEAD'
-  const result = await runGit(root, ['for-each-ref', '--format=%(refname:short)%x1f%(HEAD)%x1f%(upstream:short)', 'refs/heads', 'refs/remotes'])
+  // for-each-ref 不展开 %xNN；使用 Git 原生支持的 NUL 字段分隔符，避免分支名被污染。
+  const result = await runGit(root, ['for-each-ref', '--format=%(refname)%00%(refname:short)%00%(HEAD)%00%(upstream:short)', 'refs/heads', 'refs/remotes'])
   const local: GitBranchItem[] = []
   const remote: GitBranchItem[] = []
-  for (const line of result.stdout.split('\n')) {
-    const [name, head, upstream] = line.trim().split('\x1f')
+  const fields = result.stdout.replace(/\r?\n$/u, '').split('\0')
+  for (let index = 0; index + 3 < fields.length; index += 4) {
+    const fullName = fields[index] ?? ''
+    const name = fields[index + 1] ?? ''
+    const head = fields[index + 2] ?? ''
+    const upstream = fields[index + 3] ?? ''
     if (!name) continue
-    const item = { name, current: head === '*', upstream: upstream || null, remote: name.startsWith('origin/') || name.includes('/') && name.includes('->') }
+    const item = { name, current: head === '*', upstream: upstream || null, remote: fullName.startsWith('refs/remotes/') }
     ;(item.remote ? remote : local).push(item)
   }
   return { currentBranch, local, remote }

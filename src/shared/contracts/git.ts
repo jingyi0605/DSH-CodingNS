@@ -76,3 +76,18 @@ export interface GitCommitResult {
   readonly commitHash: string
   readonly summary: string
 }
+
+export interface GitCommitChangedFile {
+  readonly path: string
+  readonly oldPath: string | null
+  readonly status: string
+  readonly binary: boolean
+}
+
+export interface GitCommitDiff {
+  readonly commitHash: string
+  /** 旧版 Host 未提供时由 Client 从 diff 头部回退解析。 */
+  readonly files?: readonly GitCommitChangedFile[]
+  readonly content: string
+  readonly truncated: boolean
+}

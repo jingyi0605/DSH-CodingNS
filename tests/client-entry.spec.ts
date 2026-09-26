@@ -92,6 +92,11 @@ test('设置页由注册表驱动：遍历模块清单并同步启停', async ()
   }
 })
 
+test('Client 注入重载时先释放功能注册表，避免 Sidebar 类型残留', async () => {
+  const source = await readFile(clientSource, 'utf8')
+  assert.match(source, /return async \(\) => \{[\s\S]{0,180}unsubscribe\(\)[\s\S]{0,180}await registry\.reconcile\(\[\]\)/u)
+})
+
 test('设置页不再按模块名硬编码渲染分支', async () => {
   const bundle = await readFile(clientBundle, 'utf8')
   assert.equal(/\.id\s*===\s*["']reverseProxy["']/u.test(bundle), false, '产物仍按模块 id 分支')
