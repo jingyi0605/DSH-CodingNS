@@ -10,10 +10,16 @@ import {
 export const WORKSPACE_SESSION_HIDDEN_ATTRIBUTE = 'data-codingns-hidden-workspace'
 export const WORKSPACE_SESSION_HIDDEN_MENU_ATTRIBUTE = 'data-codingns-hidden-workspace-menu'
 export const WORKSPACE_SESSION_HIDDEN_LIST_ATTRIBUTE = 'data-codingns-hidden-workspaces'
+const WORKSPACE_SESSION_HIDDEN_LIST_STATE_ATTRIBUTE = 'data-codingns-hidden-workspaces-state'
 const WORKSPACE_SESSION_HIDDEN_MENU_WORKSPACE_ATTRIBUTE = 'data-codingns-hidden-workspace-id'
+export const WORKSPACE_SESSION_HIDDEN_FILTER_ATTRIBUTE = 'data-codingns-hidden-workspace-filter'
+export const WORKSPACE_SESSION_HIDDEN_FILTER_CHECK_ATTRIBUTE = 'data-codingns-hidden-workspace-filter-check'
+const WORKSPACE_SESSION_HIDDEN_FILTER_BOUND_ATTRIBUTE = 'data-codingns-hidden-workspace-filter-bound'
 
 const MENU_ATTRIBUTE = 'aria-haspopup'
 const WORKSPACE_MENU_PATTERN = /(?:更多|菜单|选项|more|menu|option)/iu
+const WORKSPACE_FILTER_PATTERN = /(?:视图选项|筛选选项|view\s*options|filter\s*options)/iu
+type ActiveMenuKind = 'workspace' | 'filter'
 
 export interface WorkspaceSessionVisibilityDomController {
   /** 重新读取工作区并同步侧栏 DOM。 */
@@ -34,7 +40,7 @@ export interface WorkspaceSessionVisibilityDomOptions {
 }
 
 /**
- * 给原生工作区菜单增加隐藏动作，并在工作区列表底部渲染恢复入口。
+ * 给原生工作区菜单增加隐藏动作，并通过工作区筛选菜单控制恢复列表。
  *
  * DSH 当前版本没有公开工作区可见性 API，因此这里仅隐藏原生 DOM，工作区
  * 本身仍由 DSH Workspace Controller 管理；隐藏 ID 存在 Codingns4DSH 设置中。
@@ -52,6 +58,13 @@ export function startWorkspaceSessionVisibilityDom(
   let scanQueued = false
   let loading: Promise<void> | undefined
   let activeMenuWorkspaceId: string | undefined
+  let activeMenuKind: ActiveMenuKind | undefined
+  let activeFilterTrigger: HTMLElement | undefined
+  let suppressFilterTrigger = false
+  let menuContextPending = false
+  let showHiddenWorkspaces = false
+  let menuRescanTimer: ReturnType<typeof globalThis.setTimeout> | undefined
+  let knownNativeMenus = new Set<HTMLElement>()
   let changeSequence = 0
   const menuWorkspaceIds = new WeakMap<HTMLElement, string>()
 
@@ -64,12 +77,12 @@ export function startWorkspaceSessionVisibilityDom(
     else next.delete(workspaceId)
     const normalized = normalizeIds([...next])
     hiddenWorkspaceIds = new Set(normalized)
-    scan()
+    scheduleScan()
     if (persist === undefined) return
     Promise.resolve(persist(normalized)).catch(() => {
       if (change !== changeSequence) return
       hiddenWorkspaceIds = new Set(previous)
-      scan()
+      scheduleScan()
     })
   }
 
@@ -94,7 +107,7 @@ export function startWorkspaceSessionVisibilityDom(
     observer?.disconnect()
     try {
       clearHiddenWorkspaceNodes(dom)
-      removeVisibilityEntries(dom)
+      if (!showHiddenWorkspaces) removeVisibilityEntries(dom)
       const headers = findWorkspaceHeaders(dom)
       const workspaceIds = new Set(workspaces.map((workspace) => workspace.workspaceId))
       for (const header of headers) {
@@ -103,15 +116,46 @@ export function startWorkspaceSessionVisibilityDom(
         workspaceIds.add(workspaceId)
         bindWorkspaceMenuTriggers(header, workspaceId, () => {
           activeMenuWorkspaceId = workspaceId
+          activeMenuKind = 'workspace'
+          menuContextPending = true
           // 菜单由 DSH 在点击事件后异步挂载到 Portal；在事件队列结束后再扫描，
           // 避免在宿主菜单尚未完成打开时同步改写它的 DOM。
           scheduleScan()
+          scheduleMenuRescan()
         })
         if (hiddenWorkspaceIds.has(workspaceId)) markWorkspaceHidden(header, workspaceId)
       }
-      injectMenuActions(dom, activeMenuWorkspaceId, workspaceIds, menuWorkspaceIds, (workspaceId) => updateVisibility(workspaceId, true))
-      if (dom.querySelectorAll<HTMLElement>('[role="menu"]').length > 0) activeMenuWorkspaceId = undefined
-      injectHiddenWorkspaceFooter(dom, headers, workspaces, hiddenWorkspaceIds, (workspaceId) => updateVisibility(workspaceId, false))
+      bindWorkspaceFilterTriggers(dom, (trigger) => {
+        if (suppressFilterTrigger) return
+        activeFilterTrigger = trigger
+        activeMenuKind = 'filter'
+        menuContextPending = true
+        scheduleScan()
+        scheduleMenuRescan()
+      })
+      const menus = findWorkspaceMenus(dom)
+      knownNativeMenus = new Set(menus)
+      if (menus.length > 0) menuContextPending = false
+      if (activeMenuKind === 'filter') {
+        injectFilterMenuAction(dom, menus, showHiddenWorkspaces, () => {
+          showHiddenWorkspaces = !showHiddenWorkspaces
+          scheduleScan()
+        }, (menu) => closeFilterMenu(activeFilterTrigger, menu, () => {
+          suppressFilterTrigger = true
+          return () => { suppressFilterTrigger = false }
+        }))
+      } else {
+        injectWorkspaceMenuActions(menus, dom, activeMenuWorkspaceId, workspaceIds, menuWorkspaceIds, (workspaceId) => updateVisibility(workspaceId, true))
+      }
+      // 点击触发器与 Portal 菜单挂载不是同一个同步阶段。菜单尚未出现时
+      // 必须保留上下文，否则后续 MutationObserver 扫描无法判断这是筛选菜单。
+      if (menus.length === 0 && !menuContextPending) {
+        activeMenuWorkspaceId = undefined
+        activeMenuKind = undefined
+      }
+      if (showHiddenWorkspaces) {
+        injectHiddenWorkspaceFooter(dom, headers, workspaces, hiddenWorkspaceIds, (workspaceId) => updateVisibility(workspaceId, false))
+      }
     } finally {
       if (!disposed && observer !== undefined && dom.documentElement !== null) {
         observer.observe(dom.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-expanded'] })
@@ -124,13 +168,21 @@ export function startWorkspaceSessionVisibilityDom(
     // 展开恢复列表也使用 aria-expanded；忽略插件自身的属性变化，避免每次
     // 点击列表都被观察器重建成收起状态。
     if (mutations.length > 0 && mutations.every((mutation) => (
-      isVisibilityMutation(mutation.target) || isNativeMenuMutation(mutation.target)
+      isVisibilityMutation(mutation.target) || isNativeMenuMutation(mutation.target, knownNativeMenus)
     ))) return
     scanQueued = true
     queueMicrotask(() => {
       scanQueued = false
       scan()
     })
+  }
+
+  const scheduleMenuRescan = (): void => {
+    if (menuRescanTimer !== undefined) globalThis.clearTimeout(menuRescanTimer)
+    menuRescanTimer = globalThis.setTimeout(() => {
+      menuRescanTimer = undefined
+      scheduleScan()
+    }, 50)
   }
 
   const observer = dom === undefined || Observer === undefined
@@ -157,6 +209,8 @@ export function startWorkspaceSessionVisibilityDom(
       if (disposed) return
       disposed = true
       observer?.disconnect()
+      if (menuRescanTimer !== undefined) globalThis.clearTimeout(menuRescanTimer)
+      knownNativeMenus = new Set()
       if (dom !== undefined) {
         clearHiddenWorkspaceNodes(dom)
         removeVisibilityEntries(dom)
@@ -172,10 +226,11 @@ function isVisibilityMutation(target: Node): boolean {
       || target.closest(`[${WORKSPACE_SESSION_HIDDEN_MENU_ATTRIBUTE}]`) !== null)
 }
 
-function isNativeMenuMutation(target: Node): boolean {
+function isNativeMenuMutation(target: Node, knownMenus: ReadonlySet<HTMLElement>): boolean {
   return typeof Element !== 'undefined'
     && target instanceof Element
-    && target.closest('[role="menu"]') !== null
+    && (target.closest('[role="menu"], [role="listbox"], [data-menu-content], [data-radix-menu-content]') !== null
+      || [...knownMenus].some((menu) => menu.contains(target)))
 }
 
 function normalizeIds(ids: readonly string[]): string[] {
@@ -191,7 +246,6 @@ function bindWorkspaceMenuTriggers(header: HTMLElement, workspaceId: string, rem
     if (element === header || !isWorkspaceMenuTrigger(element)) continue
     if (element.getAttribute('data-codingns-hidden-menu-bound') === workspaceId) continue
     element.setAttribute('data-codingns-hidden-menu-bound', workspaceId)
-    element.addEventListener('pointerdown', rememberWorkspace)
     element.addEventListener('click', rememberWorkspace)
   }
 }
@@ -202,14 +256,59 @@ function isWorkspaceMenuTrigger(element: HTMLElement): boolean {
   return WORKSPACE_MENU_PATTERN.test(label)
 }
 
-function injectMenuActions(
+function bindWorkspaceFilterTriggers(
+  dom: Pick<Document, 'querySelectorAll'>,
+  rememberFilter: (trigger: HTMLElement) => void,
+): void {
+  for (const element of dom.querySelectorAll<HTMLElement>('button,[role="button"]')) {
+    if (!isWorkspaceFilterTrigger(element)) continue
+    if (element.getAttribute(WORKSPACE_SESSION_HIDDEN_FILTER_BOUND_ATTRIBUTE) === 'true') continue
+    element.setAttribute(WORKSPACE_SESSION_HIDDEN_FILTER_BOUND_ATTRIBUTE, 'true')
+    element.addEventListener('click', () => rememberFilter(element))
+  }
+}
+
+function isWorkspaceFilterTrigger(element: HTMLElement): boolean {
+  const label = `${element.textContent ?? ''} ${element.getAttribute('aria-label') ?? ''} ${element.title}`.replace(/\s+/gu, ' ')
+  return WORKSPACE_FILTER_PATTERN.test(label)
+}
+
+function findWorkspaceMenus(dom: Pick<Document, 'querySelectorAll'>): HTMLElement[] {
+  const explicit = [...dom.querySelectorAll<HTMLElement>('[role="menu"], [role="listbox"], [data-menu-content], [data-radix-menu-content]')]
+  const matchingExplicit = explicit.filter(isWorkspaceFilterMenu)
+  if (matchingExplicit.length > 0) return matchingExplicit
+  if (explicit.length > 0) return explicit
+  // 某些 DSH 构建不会给 Portal 菜单设置 role。不能遍历页面所有 div 并对每个
+  // 节点读取 textContent，那会在长会话页面上反复遍历整棵消息树，退化为 O(N²)。
+  // 从已有菜单项向上聚合少量候选容器，复杂度只和菜单项数量及祖先深度有关。
+  const itemSelector = 'button,[role="menuitem"],[role="menuitemcheckbox"]'
+  const counts = new Map<HTMLElement, number>()
+  for (const item of dom.querySelectorAll<HTMLElement>(itemSelector)) {
+    let current = item.parentElement
+    for (let depth = 0; depth < 8 && current !== null; depth += 1, current = current.parentElement) {
+      counts.set(current, (counts.get(current) ?? 0) + 1)
+    }
+  }
+  const candidates = [...counts.keys()].filter((element) => (
+    (counts.get(element) ?? 0) >= 3
+      && /(?:分组方式|排序方式|筛选会话|group(?:ing)?|sort|filter)/iu.test(element.textContent ?? '')
+  ))
+  return candidates.filter((element) => !candidates.some((other) => other !== element && element.contains(other)))
+}
+
+function isWorkspaceFilterMenu(element: HTMLElement): boolean {
+  return /(?:分组方式|排序方式|筛选会话|group(?:ing)?|sort(?:ing)?|filter(?:\s+sessions?)?)/iu.test(element.textContent ?? '')
+}
+
+function injectWorkspaceMenuActions(
+  menus: readonly HTMLElement[],
   dom: Pick<Document, 'querySelectorAll' | 'createElement'>,
   activeWorkspaceId: string | undefined,
   workspaceIds: ReadonlySet<string>,
   menuWorkspaceIds: WeakMap<HTMLElement, string>,
   onHide: (workspaceId: string) => void,
 ): void {
-  for (const menu of dom.querySelectorAll<HTMLElement>('[role="menu"]')) {
+  for (const menu of menus) {
     const workspaceId = activeWorkspaceId ?? resolveWorkspaceId(menu) ?? menuWorkspaceIds.get(menu)
     if (workspaceId === undefined) continue
     if (!workspaceIds.has(workspaceId)) continue
@@ -223,16 +322,103 @@ function injectMenuActions(
     action.setAttribute(WORKSPACE_SESSION_HIDDEN_MENU_ATTRIBUTE, '')
     action.setAttribute(WORKSPACE_SESSION_HIDDEN_MENU_WORKSPACE_ATTRIBUTE, workspaceId)
     action.setAttribute('aria-label', '隐藏工作区')
+    applyNativeMenuItemStyle(action, menu)
     action.textContent = '隐藏工作区'
-    Object.assign(action.style, menuItemStyle)
+    const actionIcon = createHiddenIcon(dom)
+    action.insertBefore(actionIcon, action.firstChild)
     action.addEventListener('click', () => {
-      onHide(workspaceId)
-      // 隐藏动作由插件追加，DSH 菜单本身不会替它自动收起；移除当前
-      // Portal 菜单可以避免用户看到已经失效的菜单项。
-      menu.remove()
+      // 先让 DSH 完成原生菜单的 click 处理，再修改工作区 DOM；同步扫描会
+      // 与宿主 React 菜单的提交阶段竞争，表现为点击后整个页面卡住。
+      globalThis.setTimeout(() => {
+        onHide(workspaceId)
+      }, 0)
     })
     menu.appendChild(action)
   }
+}
+
+function injectFilterMenuAction(
+  dom: Pick<Document, 'querySelectorAll' | 'createElement'>,
+  menus: readonly HTMLElement[],
+  checked: boolean,
+  onChange: () => void,
+  onClose: (menu: HTMLElement) => void,
+): void {
+  // 没有可读文本时，Portal 最近追加的菜单就是当前视图菜单；避免把选项
+  // 错注入到页面中其他仍然存在的菜单。
+  const menu = menus.find(isWorkspaceFilterMenu) ?? menus[menus.length - 1]
+  if (menu === undefined) return
+  const existing = menu.querySelector<HTMLElement>(`[${WORKSPACE_SESSION_HIDDEN_FILTER_ATTRIBUTE}]`)
+  if (existing !== null) {
+    existing.setAttribute('aria-checked', String(checked))
+    updateFilterMenuCheckmark(dom, existing, checked)
+    return
+  }
+  const action = dom.createElement('button')
+  action.type = 'button'
+  // DSH 菜单只会把 role=menuitem 视为可选择并在点击后正确收起；
+  // aria-checked 仍保留筛选项的选中语义。
+  action.setAttribute('role', 'menuitem')
+  action.setAttribute('aria-checked', String(checked))
+  action.setAttribute(WORKSPACE_SESSION_HIDDEN_FILTER_ATTRIBUTE, '')
+  action.setAttribute('aria-label', '显示隐藏的工作区')
+  applyNativeMenuItemStyle(action, menu)
+  action.textContent = '显示隐藏的工作区'
+  const actionIcon = createHiddenIcon(dom)
+  action.insertBefore(actionIcon, action.firstChild)
+  updateFilterMenuCheckmark(dom, action, checked)
+  action.addEventListener('click', () => {
+    globalThis.setTimeout(() => {
+      onChange()
+      // Portal 菜单由 DSH React 持有，不能直接 remove()，否则 React 后续
+      // 卸载时会对同一节点再次 removeChild 并抛出 NotFoundError。
+      onClose(menu)
+    }, 0)
+  })
+  menu.appendChild(action)
+}
+
+function closeFilterMenu(
+  trigger: HTMLElement | undefined,
+  menu: HTMLElement,
+  suppressTrigger: () => () => void,
+): void {
+  if (trigger === undefined || !isDomNodeConnected(menu) || typeof trigger.click !== 'function') return
+  const release = suppressTrigger()
+  try {
+    trigger.click()
+  } finally {
+    release()
+  }
+}
+
+function isDomNodeConnected(node: HTMLElement): boolean {
+  return node.parentElement !== null || node.isConnected === true
+}
+
+function updateFilterMenuCheckmark(
+  dom: Pick<Document, 'createElement'>,
+  action: HTMLElement,
+  checked: boolean,
+): void {
+  const existing = action.querySelector<HTMLElement>(`[${WORKSPACE_SESSION_HIDDEN_FILTER_CHECK_ATTRIBUTE}]`)
+  if (!checked) {
+    existing?.remove()
+    return
+  }
+  if (existing !== null) return
+  const check = createCheckIcon(dom)
+  check.setAttribute(WORKSPACE_SESSION_HIDDEN_FILTER_CHECK_ATTRIBUTE, '')
+  action.appendChild(check)
+}
+
+function applyNativeMenuItemStyle(action: HTMLElement, menu: HTMLElement): void {
+  const reference = menu.querySelector<HTMLElement>('[role="menuitem"], [role="menuitemcheckbox"], button')
+  if (reference !== null && reference.className !== '') {
+    action.className = reference.className
+    return
+  }
+  Object.assign(action.style, menuItemStyle)
 }
 
 function injectHiddenWorkspaceFooter(
@@ -254,18 +440,29 @@ function injectHiddenWorkspaceFooter(
     const workspace = recordsById.get(workspaceId)
     return workspace === undefined ? [] : [workspace]
   })
-  if (hidden.length === 0) return
   const host = findWorkspaceListContainer(dom, headers)
-  if (host === null) return
+  const existing = dom.querySelectorAll<HTMLElement>(`[${WORKSPACE_SESSION_HIDDEN_LIST_ATTRIBUTE}]`)[0] ?? null
+  if (hidden.length === 0 || host === null) {
+    existing?.remove()
+    return
+  }
+  const state = hidden.map((workspace) => `${workspace.workspaceId}\u0000${workspace.title}\u0000${workspace.path ?? ''}`).join('\u0001')
+  if (existing !== null
+    && existing.parentElement === host
+    && existing.getAttribute(WORKSPACE_SESSION_HIDDEN_LIST_STATE_ATTRIBUTE) === state) return
+  existing?.remove()
   const entry = dom.createElement('div')
   entry.setAttribute(WORKSPACE_SESSION_HIDDEN_LIST_ATTRIBUTE, '')
+  entry.setAttribute(WORKSPACE_SESSION_HIDDEN_LIST_STATE_ATTRIBUTE, state)
   Object.assign(entry.style, footerStyle)
   const toggle = dom.createElement('button')
   toggle.type = 'button'
   toggle.setAttribute('aria-expanded', 'false')
   toggle.setAttribute('aria-label', `隐藏的工作区 ${hidden.length}`)
-  toggle.textContent = `隐藏的工作区 ${hidden.length}`
   Object.assign(toggle.style, menuItemStyle)
+  toggle.textContent = `隐藏的工作区 ${hidden.length}`
+  const toggleIcon = createHiddenIcon(dom)
+  toggle.insertBefore(toggleIcon, toggle.firstChild)
   const list = dom.createElement('div')
   list.hidden = true
   Object.assign(list.style, { display: 'none', flexDirection: 'column', gap: '2px', marginTop: '2px' })
@@ -288,6 +485,58 @@ function injectHiddenWorkspaceFooter(
   })
   entry.append(toggle, list)
   host.appendChild(entry)
+}
+
+function createHiddenIcon(dom: Pick<Document, 'createElement'>): Node {
+  const createElementNS = (dom as Document).createElementNS
+  if (typeof createElementNS === 'function') {
+    const icon = createElementNS.call(dom, 'http://www.w3.org/2000/svg', 'svg') as SVGSVGElement
+    icon.setAttribute('width', '16')
+    icon.setAttribute('height', '16')
+    icon.setAttribute('viewBox', '0 0 24 24')
+    icon.setAttribute('fill', 'none')
+    icon.setAttribute('stroke', 'currentColor')
+    icon.setAttribute('stroke-width', '1.8')
+    icon.setAttribute('stroke-linecap', 'round')
+    icon.setAttribute('stroke-linejoin', 'round')
+    icon.setAttribute('aria-hidden', 'true')
+    const path = createElementNS.call(dom, 'http://www.w3.org/2000/svg', 'path') as SVGPathElement
+    path.setAttribute('d', 'M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 4.2A10.7 10.7 0 0 1 12 4c5 0 9 4 10 8-.4 1.5-1.2 2.8-2.2 3.9M6.1 6.1C4.5 7.2 3.3 8.8 2 12c1 4 5 8 10 8 1 0 2-.2 2.9-.5')
+    icon.append(path)
+    Object.assign(icon.style, hiddenIconStyle)
+    return icon
+  }
+  const icon = dom.createElement('span')
+  icon.textContent = '⊘'
+  icon.setAttribute('aria-hidden', 'true')
+  Object.assign(icon.style, hiddenIconStyle)
+  return icon
+}
+
+function createCheckIcon(dom: Pick<Document, 'createElement'>): Element {
+  const createElementNS = (dom as Document).createElementNS
+  if (typeof createElementNS === 'function') {
+    const icon = createElementNS.call(dom, 'http://www.w3.org/2000/svg', 'svg') as SVGSVGElement
+    icon.setAttribute('width', '16')
+    icon.setAttribute('height', '16')
+    icon.setAttribute('viewBox', '0 0 16 16')
+    icon.setAttribute('fill', 'none')
+    icon.setAttribute('stroke', 'currentColor')
+    icon.setAttribute('stroke-width', '1.5')
+    icon.setAttribute('stroke-linecap', 'round')
+    icon.setAttribute('stroke-linejoin', 'round')
+    icon.setAttribute('aria-hidden', 'true')
+    const path = createElementNS.call(dom, 'http://www.w3.org/2000/svg', 'path') as SVGPathElement
+    path.setAttribute('d', 'm3 8 3 3 7-7')
+    icon.append(path)
+    Object.assign(icon.style, checkIconStyle)
+    return icon
+  }
+  const icon = dom.createElement('span')
+  icon.textContent = '✓'
+  icon.setAttribute('aria-hidden', 'true')
+  Object.assign(icon.style, checkIconStyle)
+  return icon
 }
 
 function markWorkspaceHidden(header: HTMLElement, workspaceId: string): void {
@@ -339,6 +588,7 @@ function removeVisibilityEntries(dom: Pick<Document, 'querySelectorAll'>): void 
 
 function removeMenuEntries(dom: Pick<Document, 'querySelectorAll'>): void {
   for (const node of dom.querySelectorAll<HTMLElement>(`[${WORKSPACE_SESSION_HIDDEN_MENU_ATTRIBUTE}]`)) node.remove()
+  for (const node of dom.querySelectorAll<HTMLElement>(`[${WORKSPACE_SESSION_HIDDEN_FILTER_ATTRIBUTE}]`)) node.remove()
 }
 
 function findWorkspaceListContainer(
@@ -361,17 +611,46 @@ function findWorkspaceListContainer(
 }
 
 const menuItemStyle = {
-  display: 'block',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
   width: '100%',
+  minHeight: '36px',
   boxSizing: 'border-box',
-  padding: '7px 12px',
+  padding: '6px 10px',
   border: '0',
   borderRadius: '6px',
   color: 'inherit',
   background: 'transparent',
   textAlign: 'left',
   cursor: 'pointer',
-  font: 'inherit',
+  fontFamily: 'inherit',
+  fontSize: '14px',
+  fontWeight: '400',
+  lineHeight: '20px',
+}
+
+const hiddenIconStyle = {
+  display: 'inline-flex',
+  width: '16px',
+  height: '16px',
+  flex: '0 0 16px',
+  alignItems: 'center',
+  justifyContent: 'center',
+  color: 'currentColor',
+  fontSize: '16px',
+  lineHeight: '16px',
+}
+
+const checkIconStyle = {
+  display: 'inline-flex',
+  width: '16px',
+  height: '16px',
+  flex: '0 0 16px',
+  marginLeft: 'auto',
+  alignItems: 'center',
+  justifyContent: 'center',
+  color: 'currentColor',
 }
 
 const footerStyle = {

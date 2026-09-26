@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   WORKSPACE_SESSION_HIDDEN_ATTRIBUTE,
+  WORKSPACE_SESSION_HIDDEN_FILTER_CHECK_ATTRIBUTE,
+  WORKSPACE_SESSION_HIDDEN_FILTER_ATTRIBUTE,
   WORKSPACE_SESSION_HIDDEN_LIST_ATTRIBUTE,
   WORKSPACE_SESSION_HIDDEN_MENU_ATTRIBUTE,
   startWorkspaceSessionVisibilityDom,
@@ -31,12 +33,20 @@ test('工作区基线读取保留标题并兼容缺少标题的旧记录', async
   ])
 })
 
-test('工作区菜单注入隐藏动作，底部列表支持恢复且销毁时还原原生节点', async () => {
+test('工作区菜单隐藏动作与筛选恢复列表不破坏原生菜单', async () => {
   const root = new FakeElement('div')
   root.setAttribute('role', 'tree')
+  const filterTrigger = new FakeElement('button')
+  filterTrigger.setAttribute('aria-label', '视图选项')
+  let openFilterMenu = null
+  filterTrigger.addEventListener('click', (event) => {
+    if (!event.programmatic) return
+    openFilterMenu?.remove()
+    openFilterMenu = null
+  })
   const workspaceA = workspaceRow('workspace-a', '项目 A')
   const workspaceB = workspaceRow('workspace-b', '项目 B')
-  root.append(workspaceA.container, workspaceB.container)
+  root.append(filterTrigger, workspaceA.container, workspaceB.container)
   const dom = new FakeDocument(root)
   const remote = {
     workspace: {
@@ -76,11 +86,43 @@ test('工作区菜单注入隐藏动作，底部列表支持恢复且销毁时�
 
   assert.equal(workspaceB.container.hasAttribute(WORKSPACE_SESSION_HIDDEN_ATTRIBUTE), true)
   assert.equal(workspaceA.container.hasAttribute(WORKSPACE_SESSION_HIDDEN_ATTRIBUTE), false)
+  assert.equal(dom.querySelector(`[${WORKSPACE_SESSION_HIDDEN_LIST_ATTRIBUTE}]`), null)
+
+  // DSH 可能在 pointerdown 与 click 之间挂载 Portal 菜单；pointerdown
+  // 不应提前触发插件扫描并丢失筛选菜单上下文。
+  filterTrigger.dispatch('pointerdown')
+  const filterMenu = new FakeElement('div')
+  filterMenu.textContent = '分组方式 排序方式 筛选会话'
+  filterMenu.append(
+    menuItem('按工作区'),
+    menuItem('最近更新'),
+    menuItem('全部对话'),
+  )
+  root.appendChild(filterMenu)
+  openFilterMenu = filterMenu
+  observer.trigger(filterMenu)
+  await nextTurn()
+  filterTrigger.dispatch('click')
+  await nextTurn()
+  const showHiddenAction = filterMenu.querySelector(`[${WORKSPACE_SESSION_HIDDEN_FILTER_ATTRIBUTE}]`)
+  assert.ok(showHiddenAction)
+  assert.equal(showHiddenAction.querySelector(`[${WORKSPACE_SESSION_HIDDEN_FILTER_CHECK_ATTRIBUTE}]`), null)
+  showHiddenAction.dispatch('click')
+  await timerTurn()
+  await nextTurn()
+  assert.equal(filterMenu.parentElement, null)
+
   const footer = dom.querySelector(`[${WORKSPACE_SESSION_HIDDEN_LIST_ATTRIBUTE}]`)
   assert.ok(footer)
   assert.match(footer.querySelector('button').textContent, /隐藏的工作区 1/u)
+  // 其他 DOM 控制器触发扫描时，恢复入口必须复用原节点，避免与归档入口
+  // 的 MutationObserver 互相删除和重建，形成主线程死循环。
+  observer.trigger(root)
+  await nextTurn()
+  assert.equal(dom.querySelector(`[${WORKSPACE_SESSION_HIDDEN_LIST_ATTRIBUTE}]`), footer)
 
-  workspaceA.menuTrigger.dispatch('pointerdown')
+  filterMenu.remove()
+  workspaceA.menuTrigger.dispatch('click')
   const menu = new FakeElement('div')
   menu.setAttribute('role', 'menu')
   root.appendChild(menu)
@@ -89,8 +131,12 @@ test('工作区菜单注入隐藏动作，底部列表支持恢复且销毁时�
   const hideAction = menu.querySelector(`[${WORKSPACE_SESSION_HIDDEN_MENU_ATTRIBUTE}]`)
   assert.ok(hideAction)
   hideAction.dispatch('click')
+  await timerTurn()
+  await nextTurn()
   assert.deepEqual(persisted.at(-1), ['workspace-b', 'workspace-a'])
   assert.equal(workspaceA.container.hasAttribute(WORKSPACE_SESSION_HIDDEN_ATTRIBUTE), true)
+  assert.equal(menu.parentElement, root)
+  menu.remove()
 
   const currentFooter = dom.querySelector(`[${WORKSPACE_SESSION_HIDDEN_LIST_ATTRIBUTE}]`)
   const toggle = currentFooter?.querySelector('button')
@@ -99,8 +145,31 @@ test('工作区菜单注入隐藏动作，底部列表支持恢复且销毁时�
   const restore = currentFooter?.querySelector('[role="menuitem"]')
   assert.ok(restore)
   restore.dispatch('click')
+  await nextTurn()
   assert.deepEqual(persisted.at(-1), ['workspace-b'])
   assert.equal(workspaceA.container.hasAttribute(WORKSPACE_SESSION_HIDDEN_ATTRIBUTE), false)
+
+  const reopenedFilterMenu = new FakeElement('div')
+  reopenedFilterMenu.textContent = '分组方式 排序方式 筛选会话'
+  reopenedFilterMenu.append(
+    menuItem('按工作区'),
+    menuItem('最近更新'),
+    menuItem('全部对话'),
+  )
+  root.appendChild(reopenedFilterMenu)
+  openFilterMenu = reopenedFilterMenu
+  observer.trigger(reopenedFilterMenu)
+  await nextTurn()
+  filterTrigger.dispatch('click')
+  await nextTurn()
+  const checkedAction = reopenedFilterMenu.querySelector(`[${WORKSPACE_SESSION_HIDDEN_FILTER_ATTRIBUTE}]`)
+  assert.ok(checkedAction)
+  assert.ok(checkedAction.querySelector(`[${WORKSPACE_SESSION_HIDDEN_FILTER_CHECK_ATTRIBUTE}]`))
+  checkedAction.dispatch('click')
+  await timerTurn()
+  await nextTurn()
+  assert.equal(reopenedFilterMenu.parentElement, null)
+  assert.equal(dom.querySelector(`[${WORKSPACE_SESSION_HIDDEN_LIST_ATTRIBUTE}]`), null)
 
   controller.dispose()
   assert.equal(workspaceB.container.hasAttribute(WORKSPACE_SESSION_HIDDEN_ATTRIBUTE), false)
@@ -123,6 +192,13 @@ function workspaceRow(id, title) {
   return { container, header, menuTrigger }
 }
 
+function menuItem(label) {
+  const item = new FakeElement('button')
+  item.setAttribute('role', 'menuitem')
+  item.textContent = label
+  return item
+}
+
 function attachWorkspaceFiber(element, workspaceId) {
   Object.defineProperty(element, '__reactFiber$test', {
     configurable: true,
@@ -132,6 +208,10 @@ function attachWorkspaceFiber(element, workspaceId) {
 
 function nextTurn() {
   return new Promise((resolve) => setImmediate(resolve))
+}
+
+function timerTurn() {
+  return new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 class FakeElement {
@@ -157,7 +237,8 @@ class FakeElement {
   removeAttribute(name) { this.attributes.delete(name) }
   contains(node) { return node === this || this.children.some((child) => child.contains(node)) }
   addEventListener(type, listener) { const handlers = this.listeners.get(type) ?? []; handlers.push(listener); this.listeners.set(type, handlers) }
-  dispatch(type) { for (const listener of this.listeners.get(type) ?? []) listener({ target: this }) }
+  dispatch(type, event = {}) { for (const listener of this.listeners.get(type) ?? []) listener({ target: this, ...event }) }
+  click() { this.dispatch('click', { programmatic: true }) }
   querySelector(selector) { return this.querySelectorAll(selector)[0] ?? null }
   querySelectorAll(selector) {
     const matches = []
