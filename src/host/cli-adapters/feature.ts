@@ -88,7 +88,10 @@ export function createCliAdaptersFeature(options: { registry?: CodingNsCliAdapte
           case 'session/steer': return registry.steer(readSessionId(payload), readPrompt(payload), false)
           case 'session/follow-up': return registry.steer(readSessionId(payload), readPrompt(payload), true)
           case 'session/interrupt': return registry.interrupt(readSessionId(payload))
-          case 'subscription': return subscriptions.read(readSubscriptionAdapterId(payload))
+          case 'subscription': {
+            const subscription = readSubscriptionRequest(payload)
+            return subscriptions.read(subscription.adapterId, subscription.providerId)
+          }
           default: throw new Error(`未知 CLI RPC: cli/${action}`)
         }
       }))
@@ -168,10 +171,14 @@ function readAdapterId(value: unknown): string {
   return record.adapterId.trim()
 }
 
-function readSubscriptionAdapterId(value: unknown): string {
+function readSubscriptionRequest(value: unknown): { adapterId: string; providerId?: string } {
   const record = asRecord(value)
-  if (record === null || record.adapterId === undefined) return 'command-code'
-  return readAdapterId(value)
+  if (record === null || record.adapterId === undefined) return { adapterId: 'command-code' }
+  const adapterId = readAdapterId(value)
+  return {
+    adapterId,
+    ...(typeof record.providerId === 'string' && record.providerId.trim() !== '' ? { providerId: record.providerId.trim() } : {}),
+  }
 }
 
 function readSessionId(value: unknown): string {
@@ -187,6 +194,7 @@ function readSessionConfig(value: unknown): CodingNsCliSessionConfig {
     adapterId,
     ...(typeof record?.modelId === 'string' && record.modelId.trim() ? { modelId: record.modelId.trim() } : {}),
     ...(typeof record?.effortId === 'string' && record.effortId.trim() ? { effortId: record.effortId.trim() } : {}),
+    ...(typeof record?.providerId === 'string' && record.providerId.trim() ? { providerId: record.providerId.trim() } : {}),
     ...(typeof record?.providerSessionId === 'string' && record.providerSessionId.trim() ? { providerSessionId: record.providerSessionId.trim() } : {}),
   }
 }
@@ -208,7 +216,7 @@ function readPrompt(value: unknown): string {
 }
 
 /** 从 DSH 原生 llm/stream 请求头捕获当前模型和思考强度。 */
-function readDshSelection(value: Record<string, any> | null): { modelId?: string; effortId?: string } {
+function readDshSelection(value: Record<string, any> | null): { modelId?: string; effortId?: string; providerId?: string } {
   const candidates = [
     value,
     asRecord(value?.request),
@@ -227,16 +235,18 @@ function readDshSelection(value: Record<string, any> | null): { modelId?: string
   }
   const modelId = read(['model', 'modelId'])
   const effortId = read(['reasoningEffort', 'effortId', 'thinking'])
+  const providerId = read(['provider', 'providerId', 'providerName'])
   return {
     ...(modelId === undefined ? {} : { modelId }),
     ...(effortId === undefined ? {} : { effortId }),
+    ...(providerId === undefined ? {} : { providerId }),
   }
 }
 
 /** DSH Session 快照把最近选择放在 modelSelection.lastUsed/next。 */
 function readModelSelectionCandidates(value: Record<string, any> | null): Record<string, any>[] {
   const result: Record<string, any>[] = []
-  for (const candidate of [value, asRecord(value?.request), asRecord(value?.config), asRecord(value?.header)]) {
+  for (const candidate of [value, asRecord(value?.request), asRecord(value?.config), asRecord(value?.header), asRecord(asRecord(value?.record)?.rows)]) {
     const selection = asRecord(candidate?.modelSelection)
     const lastUsed = asRecord(selection?.lastUsed)
     const next = asRecord(selection?.next)

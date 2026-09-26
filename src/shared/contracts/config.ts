@@ -78,6 +78,16 @@ export interface WorkspaceSessionEnhancementSettings {
   showArchivedSessions: boolean
   /** 是否在对话底部显示订阅与上游用量检测。 */
   showSubscriptionUsage: boolean
+  /** 是否在发送按钮上方显示快捷会话入口。 */
+  showQuickPhrases: boolean
+  /** 插件本地保存的快捷会话条目。 */
+  quickPhrases: QuickPhrase[]
+}
+
+/** 可复用的快捷会话文本。 */
+export interface QuickPhrase {
+  id: string
+  text: string
 }
 
 /** 局域网访问 DSH 的持久化配置；dshPort 为 0 表示启动时自动探测。 */
@@ -137,6 +147,8 @@ export const DEFAULT_WORKSPACE_SESSION_ENHANCEMENT_SETTINGS: WorkspaceSessionEnh
   showAdapterLogo: true,
   showArchivedSessions: true,
   showSubscriptionUsage: true,
+  showQuickPhrases: true,
+  quickPhrases: [],
 }
 export const DEFAULT_CODINGNS_SETTINGS: CodingNsSettings = {
   controlBaseUrl: DEFAULT_CODINGNS_CONTROL_BASE_URL,

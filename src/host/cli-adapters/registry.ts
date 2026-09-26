@@ -199,6 +199,11 @@ export class CodingNsCliAdapterRegistry {
           : remembered?.effortId
             ? { effortId: remembered.effortId }
             : {}),
+      ...(config.providerId?.trim()
+        ? { providerId: config.providerId.trim() }
+        : sameAdapter && previous?.providerId
+          ? { providerId: previous.providerId }
+          : {}),
       ...(providerSessionId ? { providerSessionId } : sameAdapter && previous?.providerSessionId ? { providerSessionId: previous.providerSessionId } : {}),
       ...(config.rawStoreRef?.trim()
         ? { rawStoreRef: config.rawStoreRef.trim() }
@@ -260,13 +265,15 @@ export class CodingNsCliAdapterRegistry {
 
   getSession(sessionId: string): CodingNsCliSessionConfig {
     const session = this.sessions.get(sessionId)
-    if (session !== undefined && (session.adapterId === 'dsh' || this.isEnabled(session.adapterId))) return session
+    if (session !== undefined && (session.adapterId === 'dsh' || this.isEnabled(session.adapterId))) {
+      return session.adapterId === 'dsh' ? mergeDshNativeSelection(session, this.nativeSessions?.get(sessionId)) : session
+    }
     const remembered = this.preferences.get('dsh') ?? this.findRememberedPreference('dsh')
-    return {
+    return mergeDshNativeSelection({
       adapterId: 'dsh',
       ...(remembered?.modelId ? { modelId: remembered.modelId } : {}),
       ...(remembered?.effortId ? { effortId: remembered.effortId } : {}),
-    }
+    }, this.nativeSessions?.get(sessionId))
   }
 
   async *execute(input: CodingNsCliTurnInput & { readonly adapterId: CodingNsCliAdapterId }): AsyncIterable<CodingNsAgentEvent> {
@@ -712,6 +719,40 @@ function detectionFingerprint(detection: CodingNsCliDetection): string {
 
 function catalogHasModels(catalog: CodingNsCliModelCatalog): boolean {
   return catalog.groups.some((group) => group.models.length > 0)
+}
+
+/** 从 DSH 原生会话快照补齐当前模型提供商，供订阅分流使用。 */
+function mergeDshNativeSelection(
+  config: CodingNsCliSessionConfig,
+  session: unknown,
+): CodingNsCliSessionConfig {
+  if (config.adapterId !== 'dsh' || config.providerId !== undefined && config.modelId !== undefined) return config
+  const root = asRecord(session)
+  const rows = asRecord(root?.record)?.rows
+  const selectionRow = asRecord(asRecord(rows)?.modelSelection)
+  const selection = asRecord(root?.modelSelection) ?? selectionRow
+  const value = asRecord(selection?.val) ?? selection
+  const lastUsed = asRecord(value?.lastUsed)
+  const next = asRecord(value?.next)
+  const candidate = lastUsed ?? next
+  if (candidate === null) return config
+  const providerId = stringValue(candidate.provider)
+  const modelId = stringValue(candidate.model)
+  const effortId = stringValue(candidate.reasoningEffort)
+  return {
+    ...config,
+    ...(config.providerId === undefined && providerId !== undefined ? { providerId } : {}),
+    ...(config.modelId === undefined && modelId !== undefined ? { modelId } : {}),
+    ...(config.effortId === undefined && effortId !== undefined ? { effortId } : {}),
+  }
+}
+
+function asRecord(value: unknown): Record<string, any> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, any> : null
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined
 }
 
 function unrefTimer(timer: ReturnType<typeof setTimeout>): void {

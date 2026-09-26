@@ -52,6 +52,8 @@ export interface CodingNsCliSessionConfig {
   readonly adapterId: CodingNsCliAdapterId
   readonly modelId?: string
   readonly effortId?: string
+  /** DSH 原生模型提供商，例如 deepseek-official、glor；不包含凭据。 */
+  readonly providerId?: string
   /** 外部运行时会话标识，只保存在 Host 会话表中。 */
   readonly providerSessionId?: string
   readonly rawStoreRef?: string

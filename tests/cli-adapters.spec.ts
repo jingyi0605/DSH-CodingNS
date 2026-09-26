@@ -11,7 +11,7 @@ import { CodingNsCliAdapterRegistry } from '../data/build/dist/host/cli-adapters
 import { CodingNsRpcTable } from '../data/build/dist/host/rpc-table.js'
 import { FeatureRegistry } from '../data/build/dist/features/registry.js'
 import { CommandCodeSubscriptionService } from '../data/build/dist/host/cli-adapters/command-code-subscription.js'
-import { ClaudeCodeSubscriptionService, OpenCodeSubscriptionService, ProviderSubscriptionService, Sub2ApiUsageService } from '../data/build/dist/host/cli-adapters/provider-subscription.js'
+import { ClaudeCodeSubscriptionService, DeepseekSubscriptionService, OpenCodeSubscriptionService, ProviderSubscriptionService, Sub2ApiUsageService } from '../data/build/dist/host/cli-adapters/provider-subscription.js'
 
 test('Command Code 驱动只把带版本号的候选命令视为已安装', async () => {
   const calls: string[][] = []
@@ -187,6 +187,60 @@ test('Claude Code 订阅服务读取 OAuth 用量并且不返回访问令牌', a
   } finally {
     rmSync(homeDirectory, { recursive: true, force: true })
   }
+})
+
+test('官方 DeepSeek 订阅服务读取多币种余额并且不返回 API key', async () => {
+  const service = new DeepseekSubscriptionService({
+    sources: [{ baseUrl: 'https://api.deepseek.com/v1', apiKey: 'deepseek-secret' }],
+    fetch: (async (url: string, init?: RequestInit) => {
+      assert.equal(url, 'https://api.deepseek.com/user/balance')
+      assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer deepseek-secret')
+      return new Response(JSON.stringify({
+        is_available: true,
+        balance_infos: [
+          { currency: 'CNY', total_balance: '97.08', granted_balance: '0.00', topped_up_balance: '97.08' },
+          { currency: 'USD', total_balance: '13.63', granted_balance: '1.00', topped_up_balance: '12.63' },
+        ],
+      }), { status: 200 })
+    }) as typeof fetch,
+  })
+  const result = await service.read()
+  assert.equal(result?.deepseek?.isAvailable, true)
+  assert.deepEqual(result?.deepseek?.balances[1], { currency: 'USD', totalBalance: 13.63, grantedBalance: 1, toppedUpBalance: 12.63 })
+  assert.equal(result?.deepseek?.upstreamUrl, 'https://api.deepseek.com')
+  assert.doesNotMatch(JSON.stringify(result), /deepseek-secret/u)
+})
+
+test('DSH 官方来源走 DeepSeek 余额接口，第三方来源仍走 Sub2API', async () => {
+  let officialCalls = 0
+  const official = new ProviderSubscriptionService({
+    deepseek: {
+      sources: [{ baseUrl: 'https://api.deepseek.com', apiKey: 'official-secret' }],
+      fetch: (async () => {
+        officialCalls += 1
+        return new Response(JSON.stringify({ balance_infos: [{ currency: 'USD', total_balance: 4.2 }] }), { status: 200 })
+      }) as typeof fetch,
+    },
+    sub2api: { sources: {}, fetch: (async () => new Response('{}', { status: 500 })) as typeof fetch },
+  })
+  assert.equal((await official.read('dsh', 'deepseek-official'))?.deepseek?.balances[0]?.totalBalance, 4.2)
+  assert.ok(officialCalls >= 1)
+
+  let sub2apiCalls = 0
+  const upstream = new ProviderSubscriptionService({
+    sub2api: {
+      sources: { dsh: { baseUrl: 'https://sub2api.example.test', apiKey: 'upstream-secret' } },
+      fetch: (async (url: string) => {
+        if (url === 'https://sub2api.example.test/logo.svg') return new Response('', { status: 404 })
+        sub2apiCalls += 1
+        assert.equal(url, 'https://sub2api.example.test/v1/usage')
+        return new Response(JSON.stringify({ balance: 10, usage: { today: {}, total: {} } }), { status: 200 })
+      }) as typeof fetch,
+    },
+    deepseek: { fetch: (async () => { throw new Error('不应请求官方接口') }) as typeof fetch },
+  })
+  assert.equal((await upstream.read('dsh', 'glor'))?.sub2api?.balance, 10)
+  assert.equal(sub2apiCalls, 1)
 })
 
 test('Sub2API 用量服务映射账户统计并计算缓存命中率且不返回密钥', async () => {
@@ -488,6 +542,7 @@ test('CLI 功能模块按会话配置接管 llm/stream，并保留默认 DSH 流
     adapterId: 'dsh',
     modelId: 'deepseek-chat',
     effortId: 'high',
+    providerId: 'deepseek',
   })
   await features.disable('cliAdapters')
   assert.equal(listener, undefined)

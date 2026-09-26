@@ -28,6 +28,23 @@ export interface CliSubscriptionUsage {
   readonly capturedAt: string
   /** 第三方上游的账户余额和用量摘要；原始 API key 永不进入此结构。 */
   readonly sub2api?: Sub2ApiUsage
+  /** 官方 DeepSeek API 的账户余额摘要；原始 API key 永不进入此结构。 */
+  readonly deepseek?: DeepseekUsage
+}
+
+/** 官方 DeepSeek API 返回的单个币种余额。金额单位由 currency 指定。 */
+export interface DeepseekBalance {
+  readonly currency: string
+  readonly totalBalance: number
+  readonly grantedBalance: number
+  readonly toppedUpBalance: number
+}
+
+/** 官方 DeepSeek API 的安全余额摘要。 */
+export interface DeepseekUsage {
+  readonly upstreamUrl: string
+  readonly isAvailable: boolean | null
+  readonly balances: readonly DeepseekBalance[]
 }
 
 export interface Sub2ApiUsagePoint {

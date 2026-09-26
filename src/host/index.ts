@@ -178,6 +178,7 @@ export {
   createHostFeatures,
   createCliAdaptersFeature,
   createTerminalProcessFeature,
+  createGitManagementFeature,
 } from './features/index.js'
 export type { CodingNsHostServices } from './features/index.js'
 export { CodingNsSettingsSchema, registerCodingNsSettings } from './settings.js'
@@ -223,8 +224,10 @@ export {
   ProviderSubscriptionService,
   CodexSubscriptionService,
   ClaudeCodeSubscriptionService,
+  DeepseekSubscriptionService,
   Sub2ApiUsageService,
   OpenCodeSubscriptionService,
+  type DeepseekSubscriptionOptions,
   type Sub2ApiSource,
   type Sub2ApiUsageOptions,
 } from './cli-adapters/provider-subscription.js'

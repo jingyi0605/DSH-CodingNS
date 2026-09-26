@@ -12,6 +12,7 @@ import { useCodingNsTranslator, type CodingNsLocale } from './locale.js'
 
 interface SessionSnapshot {
   readonly sessionId?: string
+  readonly modelSelection?: unknown
   readonly blank?: boolean
   readonly promptAttempted?: boolean
   readonly running?: boolean
@@ -24,6 +25,7 @@ type SessionSelector = <Selected>(selector: (session: SessionSnapshot) => Select
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     'conversation.input.right': { kind: 'list'; scope: 'session' }
+    'conversation.input.overlay': { kind: 'list'; scope: 'session' }
   }
   interface SessionStandardProps {
     sessionId: string

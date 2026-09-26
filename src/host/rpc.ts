@@ -184,6 +184,7 @@ const CODINGNS_RPC_ENDPOINTS = [
   'debug/config/get', 'debug/config/save', 'debug/config/update', 'debug/config/delete', 'debug/profile/list', 'debug/profile/launch',
   'debug/runtime/get', 'debug/runtime/list', 'debug/runtime/stop',
   'debug/port/check', 'debug/port/terminate', 'debug/port/kill', 'debug/proxy/get', 'debug/proxy/enable', 'debug/proxy/disable',
+  'git/status', 'git/init', 'git/diff', 'git/stage', 'git/unstage', 'git/discard', 'git/commit', 'git/history', 'git/branches', 'git/switch',
   'lanAccessDsh/addresses', 'lanAccessDsh/detect', 'lanAccessDsh/get', 'lanAccessDsh/settings/get', 'lanAccessDsh/settings/set', 'lanAccessDsh/login/get', 'lanAccessDsh/login/set', 'lanAccessDsh/login/session/open', 'lanAccessDsh/start', 'lanAccessDsh/stop',
   'cli/catalog', 'cli/models', 'cli/adapter/set', 'cli/session/get', 'cli/session/set', 'cli/session/list', 'cli/session/adapter-map', 'cli/session/archive', 'cli/session/steer', 'cli/session/follow-up', 'cli/session/interrupt', 'cli/subscription',
 ] as const
@@ -250,9 +251,9 @@ function parseSettingsOp(value: unknown): SettingsPathOp {
 
 function isAllowedSettingsPath(path: readonly string[]): boolean {
   if (path.length === 1) return ['controlBaseUrl', 'controlBaseUrls', 'terminalEnhancement', 'workspaceSessionEnhancement'].includes(path[0] ?? '')
-  if (path[0] === 'modules') return path.length === 2 && ['lanAccess', 'reverseProxy', 'cliAdapters', 'terminalEnhancement', 'workspaceSessionEnhancement', 'debug'].includes(path[1] ?? '')
+  if (path[0] === 'modules') return path.length === 2 && ['lanAccess', 'reverseProxy', 'cliAdapters', 'terminalEnhancement', 'workspaceSessionEnhancement', 'debug', 'gitManagement'].includes(path[1] ?? '')
   if (path[0] === 'workspaceSessionEnhancement') {
-    return path.length === 2 && ['showAdapterLogo', 'showArchivedSessions', 'showSubscriptionUsage'].includes(path[1] ?? '')
+    return path.length === 2 && ['showAdapterLogo', 'showArchivedSessions', 'showSubscriptionUsage', 'showQuickPhrases', 'quickPhrases'].includes(path[1] ?? '')
   }
   return path[0] === 'lanAccessDsh' && path.length === 2 && ['autoStart', 'listenHost', 'listenPort', 'dshPort'].includes(path[1] ?? '')
 }

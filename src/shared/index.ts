@@ -31,6 +31,7 @@ export {
   type TerminalCursorStyle,
   type TerminalEnhancementSettings,
   type TerminalProfileId,
+  type QuickPhrase,
   type WorkspaceSessionEnhancementSettings,
 } from './contracts/config.js'
 export type {
@@ -122,8 +123,22 @@ export type {
   CommandCodeSubscriptionWindow,
 } from './contracts/command-code.js'
 export type {
+  GitBranchItem,
+  GitBranchSnapshot,
+  GitChangeItem,
+  GitCommitResult,
+  GitDiff,
+  GitHistoryItem,
+  GitHistoryPage,
+  GitHistoryRef,
+  GitRepoSnapshot,
+  GitStatus,
+} from './contracts/git.js'
+export type {
   CliSubscriptionUsage,
   CliSubscriptionWindow,
+  DeepseekBalance,
+  DeepseekUsage,
   Sub2ApiDailyUsage,
   Sub2ApiModelUsage,
   Sub2ApiUsage,

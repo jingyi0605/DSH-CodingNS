@@ -65,6 +65,11 @@ export const CodingNsSettingsSchema: z<CodingNsSettings> = z.object({
     showAdapterLogo: z.boolean().default(DEFAULT_CODINGNS_SETTINGS.workspaceSessionEnhancement.showAdapterLogo),
     showArchivedSessions: z.boolean().default(DEFAULT_CODINGNS_SETTINGS.workspaceSessionEnhancement.showArchivedSessions),
     showSubscriptionUsage: z.boolean().default(DEFAULT_CODINGNS_SETTINGS.workspaceSessionEnhancement.showSubscriptionUsage),
+    showQuickPhrases: z.boolean().default(DEFAULT_CODINGNS_SETTINGS.workspaceSessionEnhancement.showQuickPhrases),
+    quickPhrases: z.array(z.object({
+      id: z.string().min(1).max(128),
+      text: z.string().min(1).max(4000),
+    })).default(DEFAULT_CODINGNS_SETTINGS.workspaceSessionEnhancement.quickPhrases),
   }).default(DEFAULT_CODINGNS_SETTINGS.workspaceSessionEnhancement),
 })
 

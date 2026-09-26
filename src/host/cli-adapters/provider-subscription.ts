@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
-import type { CliSubscriptionUsage, CliSubscriptionWindow, Sub2ApiDailyUsage, Sub2ApiModelUsage, Sub2ApiUsage, Sub2ApiUsagePoint } from '../../shared/contracts/subscription.js'
+import type { CliSubscriptionUsage, CliSubscriptionWindow, DeepseekBalance, DeepseekUsage, Sub2ApiDailyUsage, Sub2ApiModelUsage, Sub2ApiUsage, Sub2ApiUsagePoint } from '../../shared/contracts/subscription.js'
 import { JsonRpcProcess } from './json-rpc-process.js'
 import { detectBinary } from './rpc-driver-utils.js'
 
@@ -15,6 +15,7 @@ export class ProviderSubscriptionService {
   readonly claudeCode: ClaudeCodeSubscriptionService
   readonly opencode: OpenCodeSubscriptionService
   readonly sub2api: Sub2ApiUsageService
+  readonly deepseek: DeepseekSubscriptionService
 
   constructor(options: ProviderSubscriptionOptions = {}) {
     this.commandCode = options.commandCode
@@ -22,10 +23,12 @@ export class ProviderSubscriptionService {
     this.claudeCode = new ClaudeCodeSubscriptionService(options.claudeCode)
     this.opencode = new OpenCodeSubscriptionService(options.opencode)
     this.sub2api = new Sub2ApiUsageService(options.sub2api)
+    this.deepseek = new DeepseekSubscriptionService(options.deepseek)
   }
 
-  read(adapterId: string): Promise<CliSubscriptionUsage | null> {
-    if (adapterId === 'codex' || adapterId === 'claude-code' || adapterId === 'dsh' || adapterId === 'grok' || adapterId === 'opencode') {
+  read(adapterId: string, providerId?: string): Promise<CliSubscriptionUsage | null> {
+    if (adapterId === 'dsh') return this.readDsh(providerId)
+    if (adapterId === 'codex' || adapterId === 'claude-code' || adapterId === 'grok' || adapterId === 'opencode') {
       return this.readSub2ApiFirst(adapterId)
     }
     switch (adapterId) {
@@ -35,6 +38,15 @@ export class ProviderSubscriptionService {
       case 'opencode': return this.opencode.read()
       default: return Promise.resolve(null)
     }
+  }
+
+  private async readDsh(providerId?: string): Promise<CliSubscriptionUsage | null> {
+    if (isOfficialDeepseekProvider(providerId)) return this.deepseek.read()
+    if (isThirdPartyDeepseekProvider(providerId)) return this.sub2api.read('dsh', providerId)
+    // 明确配置了第三方来源时，始终沿用 sub2api 适配器，避免把失败的上游误判为官方余额。
+    const hasThirdPartySource = this.sub2api.hasSource('dsh')
+    if (hasThirdPartySource) return this.sub2api.read('dsh')
+    return this.deepseek.read()
   }
 
   private async readSub2ApiFirst(adapterId: string): Promise<CliSubscriptionUsage | null> {
@@ -56,11 +68,76 @@ export interface ProviderSubscriptionOptions {
   readonly claudeCode?: ClaudeCodeSubscriptionOptions
   readonly opencode?: OpenCodeSubscriptionOptions
   readonly sub2api?: Sub2ApiUsageOptions
+  readonly deepseek?: DeepseekSubscriptionOptions
 }
 
 export interface SubscriptionReader { read(): Promise<CliSubscriptionUsage | null> }
 
 export interface Sub2ApiSource { readonly baseUrl: string; readonly apiKey: string }
+
+export interface DeepseekSubscriptionOptions {
+  readonly fetch?: FetchLike
+  readonly timeoutMs?: number
+  readonly sources?: readonly Sub2ApiSource[]
+}
+
+/** 读取官方 DeepSeek API 的余额；凭据只在 Host 内使用。 */
+export class DeepseekSubscriptionService {
+  private readonly request: FetchLike
+  private readonly timeoutMs: number
+  private readonly configuredSources: readonly Sub2ApiSource[] | undefined
+
+  constructor(options: DeepseekSubscriptionOptions = {}) {
+    this.request = options.fetch ?? fetch
+    this.timeoutMs = options.timeoutMs ?? 8_000
+    this.configuredSources = options.sources
+  }
+
+  async read(source?: Sub2ApiSource): Promise<CliSubscriptionUsage | null> {
+    const sources = source === undefined ? (this.configuredSources ?? resolveDeepseekSources()) : [source]
+    for (const candidate of sources) {
+      if (!isOfficialDeepseekUrl(candidate.baseUrl)) continue
+      const result = await this.readSource(candidate)
+      if (result !== null) return result
+    }
+    return null
+  }
+
+  private async readSource(source: Sub2ApiSource): Promise<CliSubscriptionUsage | null> {
+    const baseUrl = deepseekApiRoot(source.baseUrl)
+    if (baseUrl === '' || source.apiKey.trim() === '') return null
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs)
+    try {
+      const response = await this.request(`${baseUrl}/user/balance`, {
+        headers: {
+          Authorization: source.apiKey.trim().startsWith('Bearer ') ? source.apiKey.trim() : `Bearer ${source.apiKey.trim()}`,
+          Accept: 'application/json',
+        },
+        signal: controller.signal,
+      })
+      if (!response.ok) return null
+      const usage = normalizeDeepseekUsage(await response.json(), baseUrl)
+      if (usage === null) return null
+      return {
+        authenticated: true,
+        planType: null,
+        primary: null,
+        secondary: null,
+        monthly: null,
+        rateLimitReachedType: null,
+        resetCredits: null,
+        capturedAt: new Date().toISOString(),
+        deepseek: usage,
+      }
+    } catch {
+      return null
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+}
+
 export interface Sub2ApiUsageOptions {
   readonly fetch?: FetchLike
   readonly timeoutMs?: number
@@ -79,15 +156,15 @@ export class Sub2ApiUsageService {
     this.configuredSources = options.sources
   }
 
-  hasSource(adapterId: string): boolean {
+  hasSource(adapterId: string, providerId?: string): boolean {
     const configured = this.configuredSources?.[adapterId as keyof NonNullable<Sub2ApiUsageOptions['sources']>]
     if (configured !== undefined) return Array.isArray(configured) ? configured.length > 0 : true
-    return resolveSub2ApiSources(adapterId).length > 0
+    return resolveSub2ApiSources(adapterId, providerId).length > 0
   }
 
-  async read(adapterId: string): Promise<CliSubscriptionUsage | null> {
+  async read(adapterId: string, providerId?: string): Promise<CliSubscriptionUsage | null> {
     const configured = this.configuredSources?.[adapterId as keyof NonNullable<Sub2ApiUsageOptions['sources']>]
-    const sources = configured === undefined ? resolveSub2ApiSources(adapterId) : Array.isArray(configured) ? configured : [configured]
+    const sources = configured === undefined ? resolveSub2ApiSources(adapterId, providerId) : Array.isArray(configured) ? configured : [configured]
     for (const source of sources) {
       const result = await this.readSource(source)
       if (result !== null) return result
@@ -340,6 +417,22 @@ function readText(path: string): string | null {
   try { return readFileSync(path, 'utf8') } catch { return null }
 }
 
+/** 只读取 DSH 凭据文档中的指定引用，不把凭据内容写入任何返回结构。 */
+function readDshCredential(name: string): string | null {
+  const dshHome = process.env.DSH_HOME ?? join(homedir(), '.dsh')
+  const paths = [join(dshHome, '.credentials.yaml'), join(dshHome, '.env'), join(process.cwd(), '.env')]
+  const pattern = new RegExp(`^\\s*${name}\\s*:\\s*(?:"([^"]*)"|'([^']*)'|([^#\\s]+))`, 'mu')
+  const envPattern = new RegExp(`^\\s*${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^#\\s]+))`, 'mu')
+  for (const path of paths) {
+    const source = readText(path)
+    if (source === null) continue
+    const match = path.endsWith('.env') ? envPattern.exec(source) : pattern.exec(source)
+    const value = match?.[1] ?? match?.[2] ?? match?.[3]
+    if (typeof value === 'string' && value.trim() !== '') return value.trim()
+  }
+  return null
+}
+
 function readJson(path: string): Record<string, unknown> | null {
   if (!existsSync(path)) return null
   try { return recordValue(JSON.parse(readFileSync(path, 'utf8'))) } catch { return null }
@@ -356,7 +449,94 @@ function timestampValue(value: unknown): number | null {
 }
 function clamp(value: number): number { return Math.max(0, Math.min(100, value)) }
 
-function resolveSub2ApiSources(adapterId: string): Sub2ApiSource[] {
+function normalizeDeepseekUsage(value: unknown, baseUrl: string): DeepseekUsage | null {
+  const root = recordValue(value)
+  if (root === null) return null
+  const rawBalances = root.balance_infos ?? root.balanceInfos ?? root.balances
+  if (!Array.isArray(rawBalances)) return null
+  const balances = rawBalances.flatMap((value): DeepseekBalance[] => {
+    const source = recordValue(value)
+    const currency = textValue(source?.currency)
+    const totalBalance = numberValue(source?.total_balance ?? source?.totalBalance)
+    if (currency === null || totalBalance === null) return []
+    return [{
+      currency,
+      totalBalance,
+      grantedBalance: numberValue(source?.granted_balance ?? source?.grantedBalance) ?? 0,
+      toppedUpBalance: numberValue(source?.topped_up_balance ?? source?.toppedUpBalance) ?? 0,
+    }]
+  })
+  if (balances.length === 0) return null
+  return {
+    upstreamUrl: sanitizeUpstreamUrl(baseUrl),
+    isAvailable: typeof root.is_available === 'boolean' ? root.is_available : typeof root.isAvailable === 'boolean' ? root.isAvailable : null,
+    balances,
+  }
+}
+
+function resolveDeepseekSources(): Sub2ApiSource[] {
+  const sources: Sub2ApiSource[] = []
+  const add = (source: Sub2ApiSource | null): void => {
+    if (source === null || source.baseUrl.trim() === '' || source.apiKey.trim() === '') return
+    if (!sources.some((item) => item.baseUrl === source.baseUrl && item.apiKey === source.apiKey)) sources.push(source)
+  }
+  const dshBaseUrl = textValue(process.env.DSH_BASE_URL)
+  const dshApiKey = textValue(process.env.DSH_API_KEY)
+  add(dshBaseUrl !== null && dshApiKey !== null ? { baseUrl: dshBaseUrl, apiKey: dshApiKey } : null)
+  const deepseekBaseUrl = textValue(process.env.DEEPSEEK_BASE_URL)
+  const deepseekApiKey = textValue(process.env.DEEPSEEK_API_KEY) ?? readDshCredential('DEEPSEEK_API_KEY')
+  add(deepseekApiKey === null ? null : { baseUrl: deepseekBaseUrl ?? 'https://api.deepseek.com', apiKey: deepseekApiKey })
+  add(envSource('DEEPSEEK_BASE_URL', 'DEEPSEEK_API_KEY'))
+  add(findConfigSource(readJson(join(homedir(), '.dsh', 'config.json'))))
+  return sources
+}
+
+function resolveDshProviderSource(providerId: string | undefined): Sub2ApiSource | null {
+  const normalized = providerId?.trim()
+  if (normalized === undefined || normalized === '' || isOfficialDeepseekProvider(normalized)) return null
+  const envPrefix = normalized.replace(/[^a-z0-9]+/giu, '_').toUpperCase()
+  const envBaseUrl = textValue(process.env[`${envPrefix}_BASE_URL`])
+  const envApiKey = textValue(process.env[`${envPrefix}_API_KEY`])
+  if (envBaseUrl !== null && envApiKey !== null) return { baseUrl: envBaseUrl, apiKey: envApiKey }
+  const dshHome = process.env.DSH_HOME ?? join(homedir(), '.dsh')
+  for (const path of [join(dshHome, 'settings.yaml'), join(dshHome, 'settings.yaml.imported')]) {
+    const source = readDshProviderYaml(path, normalized)
+    if (source !== null) return source
+  }
+  return null
+}
+
+function readDshProviderYaml(path: string, providerId: string): Sub2ApiSource | null {
+  const text = readText(path)
+  if (text === null) return null
+  const escaped = providerId.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+  const start = text.search(new RegExp(`^ {4}${escaped}:\\s*$`, 'mu'))
+  if (start < 0) return null
+  const rest = text.slice(start)
+  const endMatch = /^ {4}\S[^\n]*$/mu.exec(rest.slice(1))
+  const block = endMatch === null ? rest : rest.slice(0, endMatch.index + 1)
+  const baseUrl = yamlScalar(block.match(/^\s+baseURL:\s*(.+)$/mu)?.[1])
+  const keyRef = yamlScalar(block.match(/^\s+apiKeyEnv:\s*(.+)$/mu)?.[1])
+  const apiKey = keyRef === null ? null : textValue(process.env[keyRef]) ?? readDshCredential(keyRef)
+  return baseUrl === null || apiKey === null ? null : { baseUrl, apiKey }
+}
+
+function yamlScalar(value: string | undefined): string | null {
+  if (value === undefined) return null
+  const normalized = value.trim().replace(/^(['"])(.*)\1$/u, '$2')
+  return normalized === '' ? null : normalized
+}
+
+function isOfficialDeepseekProvider(providerId: string | undefined): boolean {
+  if (providerId === undefined) return false
+  return /^(?:deepseek(?:-official)?|official-deepseek)$/iu.test(providerId.trim())
+}
+
+function isThirdPartyDeepseekProvider(providerId: string | undefined): boolean {
+  return providerId !== undefined && providerId.trim() !== '' && !isOfficialDeepseekProvider(providerId)
+}
+
+function resolveSub2ApiSources(adapterId: string, providerId?: string): Sub2ApiSource[] {
   const sources: Sub2ApiSource[] = []
   const add = (source: Sub2ApiSource | null): void => {
     if (source === null || source.baseUrl.trim() === '' || source.apiKey.trim() === '') return
@@ -389,10 +569,14 @@ function resolveSub2ApiSources(adapterId: string): Sub2ApiSource[] {
     add(findConfigSource(config))
   }
   if (adapterId === 'dsh') {
-    add(envSource('DSH_BASE_URL', 'DSH_API_KEY'))
-    add(envSource('DEEPSEEK_BASE_URL', 'DEEPSEEK_API_KEY'))
+    const providerSource = resolveDshProviderSource(providerId)
+    add(providerSource)
+    // 已明确拿到当前提供商时只查询它的上游，不能把另一个配置项的余额冒充过来。
+    if (providerId !== undefined && !isOfficialDeepseekProvider(providerId)) return sources
+    for (const source of resolveDeepseekSources()) {
+      if (!isOfficialDeepseekUrl(source.baseUrl)) add(source)
+    }
     add(envSource('OPENAI_BASE_URL', 'OPENAI_API_KEY'))
-    add(findConfigSource(readJson(join(homedir(), '.dsh', 'config.json'))))
   }
   if (adapterId === 'grok') {
     add(envSource('GROK_BASE_URL', 'GROK_API_KEY'))
@@ -401,6 +585,27 @@ function resolveSub2ApiSources(adapterId: string): Sub2ApiSource[] {
     add(findConfigSource(readJson(join(homedir(), '.grok', 'config.json'))))
   }
   return sources
+}
+
+function isOfficialDeepseekUrl(value: string): boolean {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase()
+    return hostname === 'api.deepseek.com' || hostname === 'api.deepseek.com.cn'
+  } catch {
+    return false
+  }
+}
+
+function deepseekApiRoot(value: string): string {
+  try {
+    const url = new URL(value)
+    url.pathname = url.pathname.replace(/\/v1\/?$/u, '').replace(/\/+$/u, '')
+    url.search = ''
+    url.hash = ''
+    return url.toString().replace(/\/$/u, '')
+  } catch {
+    return ''
+  }
 }
 
 function defaultOpenCodeDataDirectory(): string {

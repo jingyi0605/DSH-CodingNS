@@ -2,10 +2,12 @@ import { createElement, useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import type { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
-import type { CliSubscriptionUsage, CliSubscriptionWindow, Sub2ApiModelUsage, Sub2ApiUsage, Sub2ApiUsagePoint } from '../shared/contracts/subscription.js'
+import type { CliSubscriptionUsage, CliSubscriptionWindow, DeepseekUsage, Sub2ApiModelUsage, Sub2ApiUsage, Sub2ApiUsagePoint } from '../shared/contracts/subscription.js'
 import type { CodingNsRpcClient } from './features/types.js'
 import { callCliRpc } from './cli-catalog.js'
+import { providerIconUrl } from './provider-icons.js'
 import { dshPopupSurfaceStyle, dshThemeColor } from './theme.js'
+import type { SessionSnapshot } from './cli-slots.js'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SessionStandardProps {
@@ -13,9 +15,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
+type SessionSelector = <Selected>(selector: (value: SessionSnapshot) => Selected) => Selected
+
 interface SubscriptionSlotProps {
   readonly rpc: CodingNsRpcClient
   readonly sessionId?: string
+  readonly useSession?: SessionSelector
 }
 
 /** 在 DSH 原生步骤统计左侧显示当前 Agent 的订阅余量。 */
@@ -32,11 +37,13 @@ export function registerSubscriptionSlot(slots: SlotRegistry, rpc: CodingNsRpcCl
 function CommandCodeSubscriptionSlot(props: SubscriptionSlotProps): ReactElement | null {
   const [usage, setUsage] = useState<CliSubscriptionUsage | null>(null)
   const [adapterId, setAdapterId] = useState<string | null>(null)
+  const [providerId, setProviderId] = useState<string | null>(null)
   const [eligible, setEligible] = useState(false)
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [clock, setClock] = useState(() => Date.now())
   const rootRef = useRef<HTMLDivElement>(null)
+  const modelSelectionRevision = props.useSession?.((value) => JSON.stringify(value.modelSelection))
 
   useEffect(() => {
     const sessionId = props.sessionId?.trim()
@@ -44,6 +51,7 @@ function CommandCodeSubscriptionSlot(props: SubscriptionSlotProps): ReactElement
       setEligible(false)
       setUsage(null)
       setAdapterId(null)
+      setProviderId(null)
       setOpen(false)
       return
     }
@@ -51,25 +59,31 @@ function CommandCodeSubscriptionSlot(props: SubscriptionSlotProps): ReactElement
     setEligible(false)
     setUsage(null)
     setAdapterId(null)
+    setProviderId(null)
     setOpen(false)
     const refresh = async (): Promise<void> => {
       setLoading(true)
       try {
-        const selection = await callCliRpc<{ readonly adapterId?: string }>(props.rpc, 'session/get', { sessionId })
+        const selection = await callCliRpc<{ readonly adapterId?: string; readonly providerId?: string }>(props.rpc, 'session/get', { sessionId })
         const adapterId = selection.adapterId
         if (!active || !isSubscriptionAdapter(adapterId)) {
           if (active) {
             setEligible(false)
             setUsage(null)
             setAdapterId(null)
+            setProviderId(null)
           }
           return
         }
         if (active) {
           setEligible(true)
           setAdapterId(adapterId)
+          setProviderId(selection.providerId ?? null)
         }
-        const next = await callCliRpc<CliSubscriptionUsage | null>(props.rpc, 'subscription', { adapterId })
+        const next = await callCliRpc<CliSubscriptionUsage | null>(props.rpc, 'subscription', {
+          adapterId,
+          ...(selection.providerId ? { providerId: selection.providerId } : {}),
+        })
         if (active) setUsage(next)
       } catch {
         if (active) {
@@ -86,7 +100,7 @@ function CommandCodeSubscriptionSlot(props: SubscriptionSlotProps): ReactElement
       active = false
       globalThis.clearInterval(timer)
     }
-  }, [props.rpc, props.sessionId])
+  }, [props.rpc, props.sessionId, modelSelectionRevision])
 
   useEffect(() => {
     if (!eligible || usage === null) return
@@ -112,16 +126,39 @@ function CommandCodeSubscriptionSlot(props: SubscriptionSlotProps): ReactElement
   }, [open])
 
   // 未拿到真实订阅数据时不占用底部栏空间；加载状态不能伪装成订阅存在。
-  if (!eligible || usage === null || (usage.sub2api === undefined && resolveDisplayWindow(usage) === null)) return null
+  if (!eligible || usage === null || (usage.sub2api === undefined && usage.deepseek === undefined && resolveDisplayWindow(usage) === null)) return null
   const sub2api = usage.sub2api
-  const displayWindow = sub2api === undefined ? resolveDisplayWindow(usage) : null
+  const deepseek = usage.deepseek
+  const displayWindow = sub2api === undefined && deepseek === undefined ? resolveDisplayWindow(usage) : null
   const remaining = displayWindow?.remainingPercent ?? null
   const resetLabel = displayWindow === null ? null : formatCountdown(displayWindow.resetsAt, clock)
-  const providerName = subscriptionProviderName(adapterId)
-  const label = sub2api === undefined
+  const providerName = subscriptionProviderName(adapterId, providerId, usage)
+  const deepseekBalance = deepseek === undefined ? null : selectDeepseekBalance(deepseek)
+  const deepseekIconSource = providerIconUrl('dsh')
+  const label = sub2api === undefined && deepseek === undefined
     ? `${providerName} 订阅余量 ${formatPercent(remaining ?? 0)}%`
-    : `${providerName} 上游余额 ${formatSub2ApiMoney(sub2api.balance, sub2api.unit)}`
+    : sub2api !== undefined
+      ? `${providerName} 上游余额 ${formatSub2ApiMoney(sub2api.balance, sub2api.unit)}`
+      : `${providerName} 余额 ${deepseekBalance === null ? '不可用' : formatDeepseekMoney(deepseekBalance.totalBalance, deepseekBalance.currency)}`
   const logoSource = sub2api === undefined ? '' : (sub2api.logoDataUrl ?? (isRemoteWebContext() ? '' : sub2api.logoUrl))
+  const triggerContent = sub2api === undefined && deepseek === undefined
+    ? createElement('span', { 'aria-hidden': true, style: progressRingStyle() },
+      createElement('span', { style: { ...progressRingVisualStyle, background: progressRingVisualBackground(remaining === null ? 0 : remaining / 100, false) } },
+        createElement('span', { style: progressRingValueStyle },
+          createElement('span', undefined, formatRingPercentage(remaining ?? 0)),
+          createElement('span', { style: progressRingSuffixStyle }, '%'),
+        ),
+      ),
+    )
+    : sub2api !== undefined
+      ? createElement('span', { 'aria-hidden': true, style: sub2apiIdentityStyle },
+        logoSource !== '' && createElement('img', { src: logoSource, alt: '', width: 20, height: 20, style: sub2apiLogoStyle }),
+        createElement('span', undefined, formatSub2ApiMoney(sub2api.balance, sub2api.unit)),
+      )
+      : createElement('span', { 'aria-hidden': true, style: deepseekBalanceIdentityStyle },
+        deepseekIconSource !== undefined && createElement('img', { src: deepseekIconSource, alt: '', width: 18, height: 18, style: deepseekLogoStyle }),
+        createElement('span', { style: deepseekBalanceStyle }, deepseekBalance === null ? '--' : formatDeepseekMoney(deepseekBalance.totalBalance, deepseekBalance.currency)),
+      )
   return createElement('div', { ref: rootRef, style: subscriptionRootStyle },
     createElement('button', {
       type: 'button',
@@ -131,21 +168,11 @@ function CommandCodeSubscriptionSlot(props: SubscriptionSlotProps): ReactElement
       'aria-expanded': open,
       style: subscriptionTriggerStyle,
     },
-      sub2api === undefined
-        ? createElement('span', { 'aria-hidden': true, style: progressRingStyle() },
-          createElement('span', { style: { ...progressRingVisualStyle, background: progressRingVisualBackground(remaining === null ? 0 : remaining / 100, false) } },
-            createElement('span', { style: progressRingValueStyle },
-              createElement('span', undefined, formatRingPercentage(remaining ?? 0)),
-              createElement('span', { style: progressRingSuffixStyle }, '%'),
-            ),
-          ),
-        )
-        : createElement('span', { 'aria-hidden': true, style: sub2apiIdentityStyle },
-          logoSource !== '' && createElement('img', { src: logoSource, alt: '', width: 20, height: 20, style: sub2apiLogoStyle }),
-          createElement('span', undefined, formatSub2ApiMoney(sub2api.balance, sub2api.unit)),
-      ),
-      createElement('span', { className: 'bOPqQW_label', style: subscriptionLabelStyle },
-        sub2api === undefined ? (resetLabel ?? '订阅余量') : `今日 ${formatSub2ApiMoney(sub2api.today.cost, sub2api.unit)}`,
+      triggerContent,
+      createElement('span', { style: subscriptionLabelStyle },
+        sub2api === undefined && deepseek === undefined
+          ? (resetLabel ?? '订阅余量')
+          : sub2api !== undefined ? `今日 ${formatSub2ApiMoney(sub2api.today.cost, sub2api.unit)}` : '账户余额',
       ),
     ),
     open && createElement(SubscriptionPopover, { usage, providerName }),
@@ -154,6 +181,7 @@ function CommandCodeSubscriptionSlot(props: SubscriptionSlotProps): ReactElement
 
 function SubscriptionPopover({ usage, providerName }: { readonly usage: CliSubscriptionUsage; readonly providerName: string }): ReactElement {
   if (usage.sub2api !== undefined) return createElement(Sub2ApiPopover, { usage: usage.sub2api, providerName })
+  if (usage.deepseek !== undefined) return createElement(DeepseekPopover, { usage: usage.deepseek, providerName })
   const windows = [
     ['5 小时额度', usage.primary],
     ['周额度', usage.secondary],
@@ -171,6 +199,23 @@ function SubscriptionPopover({ usage, providerName }: { readonly usage: CliSubsc
       ),
       window.resetsAt !== null && createElement('div', { style: resetStyle }, `重置于 ${formatCountdown(window.resetsAt)}`),
     )),
+  )
+}
+
+function DeepseekPopover({ usage, providerName }: { readonly usage: DeepseekUsage; readonly providerName: string }): ReactElement {
+  return createElement('div', { role: 'dialog', 'aria-label': `${providerName} 账户余额`, style: subscriptionPopoverStyle },
+    createElement('div', { style: popoverHeadingStyle },
+      createElement('strong', undefined, `${providerName} 账户余额`),
+      createElement('span', { style: { color: usage.isAvailable === false ? dshThemeColor.error : dshThemeColor.labelTertiary } }, usage.isAvailable === false ? '不可用' : '可用'),
+    ),
+    usage.balances.map((balance) => createElement('section', { key: balance.currency, style: deepseekBalanceSectionStyle },
+      createElement('div', { style: windowHeadingStyle }, createElement('span', undefined, balance.currency), createElement('strong', undefined, formatDeepseekMoney(balance.totalBalance, balance.currency))),
+      createElement('div', { style: deepseekBalanceDetailsStyle },
+        createElement('span', undefined, `赠送 ${formatDeepseekMoney(balance.grantedBalance, balance.currency)}`),
+        createElement('span', undefined, `充值 ${formatDeepseekMoney(balance.toppedUpBalance, balance.currency)}`),
+      ),
+    )),
+    createElement('div', { style: deepseekUnavailableStatsStyle }, '官方 DeepSeek API 当前只提供账户余额接口，暂无请求量、Token 或费用明细。'),
   )
 }
 
@@ -236,13 +281,21 @@ function createModelRow(model: Sub2ApiModelUsage, unit: string): ReactElement {
 function resolveDisplayWindow(usage: CliSubscriptionUsage): CliSubscriptionWindow | null {
   return usage.primary ?? usage.secondary ?? usage.monthly
 }
+function selectDeepseekBalance(usage: DeepseekUsage): DeepseekUsage['balances'][number] | null {
+  return usage.balances.find((balance) => balance.currency.toUpperCase() === 'USD') ?? usage.balances[0] ?? null
+}
 function isSubscriptionAdapter(adapterId: unknown): adapterId is 'command-code' | 'codex' | 'claude-code' | 'dsh' | 'grok' | 'opencode' {
   return adapterId === 'command-code' || adapterId === 'codex' || adapterId === 'claude-code' || adapterId === 'dsh' || adapterId === 'grok' || adapterId === 'opencode'
 }
 function isRemoteWebContext(): boolean {
   return (globalThis as { __CODINGNS4DSH_REMOTE_WEB_CONTEXT__?: unknown }).__CODINGNS4DSH_REMOTE_WEB_CONTEXT__ === true
 }
-function subscriptionProviderName(adapterId: string | null): string {
+function subscriptionProviderName(adapterId: string | null, providerId: string | null, usage: CliSubscriptionUsage): string {
+  if (adapterId === 'dsh' && providerId !== null) {
+    if (/^(?:deepseek(?:-official)?|official-deepseek)$/iu.test(providerId)) return 'DeepSeek 官方'
+    return `${formatProviderName(providerId)} 上游`
+  }
+  if (adapterId === 'dsh' && usage.sub2api !== undefined) return `${usage.sub2api.upstreamType} 上游`
   switch (adapterId) {
     case 'command-code': return 'Command Code'
     case 'codex': return 'Codex'
@@ -253,12 +306,22 @@ function subscriptionProviderName(adapterId: string | null): string {
     default: return 'Agent'
   }
 }
+function formatProviderName(value: string): string {
+  return value.replace(/[-_]+/gu, ' ').replace(/(^|\s)([a-z])/gu, (_match, prefix, letter: string) => `${prefix}${letter.toUpperCase()}`)
+}
 function formatPercent(value: number): string { return Math.max(0, Math.min(100, value)).toFixed(0) }
 function formatRingPercentage(value: number): string { return String(Math.floor(Math.max(0, Math.min(100, value)))) }
 function formatSub2ApiMoney(value: number, unit: string): string {
   const normalizedUnit = unit.trim().toUpperCase()
   if (normalizedUnit === 'USD') return `$${value.toFixed(2)}`
   return `${value.toFixed(2)}${normalizedUnit === '' ? '' : ` ${normalizedUnit}`}`
+}
+function formatDeepseekMoney(value: number, currency: string): string {
+  const normalizedCurrency = currency.trim().toUpperCase()
+  const amount = value.toFixed(2)
+  if (normalizedCurrency === 'USD') return `$${amount}`
+  if (normalizedCurrency === 'CNY') return `¥${amount}`
+  return `${amount} ${normalizedCurrency}`
 }
 function formatSub2ApiTokens(value: number): string { return new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 1 }).format(value) }
 function formatSub2ApiPercent(value: number): string { return `${Math.max(0, Math.min(100, value)).toFixed(1)}%` }
@@ -280,6 +343,12 @@ const subscriptionTriggerStyle = { display: 'inline-flex', alignItems: 'center',
 const subscriptionLabelStyle = { whiteSpace: 'nowrap' as const }
 const sub2apiIdentityStyle = { display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' as const, fontVariantNumeric: 'tabular-nums' }
 const sub2apiLogoStyle = { display: 'block', borderRadius: 4, objectFit: 'contain' as const }
+const deepseekBalanceIdentityStyle = { display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' as const, fontVariantNumeric: 'tabular-nums' as const }
+const deepseekLogoStyle = { display: 'block', borderRadius: 5, objectFit: 'contain' as const }
+const deepseekBalanceStyle = { display: 'inline-flex', alignItems: 'center', color: dshThemeColor.labelSecondary, fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' as const }
+const deepseekBalanceSectionStyle = { display: 'grid', gap: 6, marginTop: 10, padding: '10px 0 2px', borderTop: `1px solid ${dshThemeColor.border}` }
+const deepseekBalanceDetailsStyle = { display: 'flex', justifyContent: 'space-between', gap: 12, color: dshThemeColor.labelTertiary, fontSize: 12 }
+const deepseekUnavailableStatsStyle = { marginTop: 12, paddingTop: 10, borderTop: `1px solid ${dshThemeColor.border}`, color: dshThemeColor.labelTertiary, fontSize: 12, lineHeight: '17px' }
 const progressRingVisualStyle = { boxSizing: 'border-box' as const, width: '100%', height: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 2, borderRadius: 'inherit' }
 const progressRingValueStyle = { boxSizing: 'border-box' as const, width: '100%', height: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 0.5, borderRadius: 'inherit', background: dshThemeColor.menuBackground, fontSize: 7, lineHeight: 1, fontWeight: 700, color: dshThemeColor.labelPrimary, whiteSpace: 'nowrap' as const }
 const progressRingSuffixStyle = { fontSize: 5.5, lineHeight: 1, color: dshThemeColor.labelTertiary, transform: 'translateY(1px)' }
