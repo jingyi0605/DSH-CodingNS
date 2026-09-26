@@ -641,7 +641,7 @@ test('CLI 功能模块从 DSH 会话头传递工作目录并把统一工具事�
   ])
   assert.deepEqual(nativeCalls, [{
     sessionId: 's-cwd',
-    call: { callId: 'call-1', name: 'read_directory', arguments: '{"path":"."}' },
+    call: { callId: 'call-1', name: 'read_directory', arguments: '{"path":"."}', adapterId: 'fake' },
   }])
   assert.deepEqual(nativeResults, [{
     handle: { sessionId: 's-cwd', turn: 1, step: 1, callId: 'call-1', callSeq: 10 },

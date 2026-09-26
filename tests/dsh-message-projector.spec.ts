@@ -44,7 +44,7 @@ test('公共消息投影层统一处理正文、思考、工具、用量和唯�
   ])
   assert.deepEqual(calls, [{
     sessionId: 'session-1',
-    call: { callId: 'read-1', name: 'read_directory', arguments: '{"path":"."}' },
+    call: { callId: 'read-1', name: 'read_directory', arguments: '{"path":"."}', adapterId: 'fake' },
   }])
   assert.deepEqual(results[0]?.result, { output: 'a.ts', isError: false })
   assert.equal(results.length, 1)

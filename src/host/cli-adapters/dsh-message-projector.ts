@@ -36,7 +36,7 @@ export class CodingNsDshMessageProjector {
   private finished = false
 
   constructor(private readonly options: CodingNsDshMessageProjectorOptions) {
-    this.toolHistory = new CodingNsDshToolHistoryProjector(options.nativeSessions, options.sessionId)
+    this.toolHistory = new CodingNsDshToolHistoryProjector(options.nativeSessions, options.sessionId, options.adapterId)
   }
 
   get isFinished(): boolean {

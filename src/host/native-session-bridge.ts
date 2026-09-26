@@ -22,6 +22,8 @@ export interface CodingNsNativeToolCall {
   readonly callId: string
   readonly name: string
   readonly arguments: string
+  /** 外部适配器 ID；旧调用方缺省时保持通用来源标记。 */
+  readonly adapterId?: string
 }
 
 /** 一次工具调用在 DSH Session 中的稳定位置。 */
@@ -50,6 +52,7 @@ export interface CodingNsNativeExternalToolEvent {
   readonly status: 'running' | 'completed' | 'failed'
   readonly output?: string
   readonly error?: string
+  readonly adapterId?: string
 }
 
 export type CodingNsNativeApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable'
@@ -152,6 +155,29 @@ export function createCodingNsNativeSessionBridge(ctx: Context): CodingNsNativeS
     const session = appendableSession(store?.get(sessionId))
     const position = session === null ? null : activeStep(session)
     if (session === null || position === null) return null
+    // DSH 的工具生命周期由 assistant/message 先声明，再由 tool/call 开始。
+    // 外部 Agent 已经在自身进程执行完请求，这条消息只用于持久化声明，绝不触发 DSH 执行器。
+    session.append('assistant/message', {
+      turn: position.turn,
+      step: position.step,
+      message: {
+        id: `external-tool-${call.callId}-${position.turn}-${position.step}`,
+        role: 'assistant',
+        content: [{
+          type: 'tool-call',
+          id: call.callId,
+          name: call.name,
+          arguments: call.arguments,
+        }],
+        source: {
+          kind: 'model',
+          plugin: 'codingns4dsh',
+          provider: call.adapterId?.trim() || 'codingns-external',
+          model: call.adapterId?.trim() || 'external-agent',
+        },
+      },
+      stream: [],
+    }, { surfaceOp: 'append' })
     const event = session.append('tool/call', {
       turn: position.turn,
       step: position.step,
@@ -252,7 +278,7 @@ export function createCodingNsNativeSessionBridge(ctx: Context): CodingNsNativeS
     },
     appendExternalToolEvent(sessionId, externalTool) {
       try {
-        // 兼容旧调用方，但仍然写入 DSH 原生工具事件，绝不能伪造 assistant/attempt。
+        // 兼容旧调用方；声明 assistant 工具生命周期，但绝不伪造 assistant/attempt 结算。
         const key = `${sessionId}:${externalTool.callId}`
         if (externalTool.phase === 'start') {
           if (externalHandles.has(key)) return true
@@ -260,6 +286,7 @@ export function createCodingNsNativeSessionBridge(ctx: Context): CodingNsNativeS
             callId: externalTool.callId,
             name: externalTool.name,
             arguments: externalTool.arguments,
+            ...(externalTool.adapterId === undefined ? {} : { adapterId: externalTool.adapterId }),
           })
           if (handle === null) return false
           externalHandles.set(key, handle)

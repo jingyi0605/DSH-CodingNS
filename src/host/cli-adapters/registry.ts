@@ -309,6 +309,14 @@ export class CodingNsCliAdapterRegistry {
       // Agent Loop 通常已经创建了同名 DSH 原生会话；直接调用 Registry 时才按需补建。
       // 原生服务失败不能阻断外部 Agent，消息仍由现有 llm/stream 链路处理。
       try { await this.nativeSessions?.ensure(input.sessionId, input.cwd) } catch { /* 可选服务降级 */ }
+      // 每轮都写入稳定的适配器身份。旧日志只有通用 codingns-external 标记，
+      // 这条 request/context 是升级后自动迁移时唯一可靠的回填依据。
+      try {
+        this.nativeSessions?.appendRequestContext?.(input.sessionId, {
+          provider: input.adapterId,
+          model: input.modelId ?? input.adapterId,
+        })
+      } catch { /* 原生历史写入失败不应阻断外部 Agent */ }
       for await (const event of driver.executeTurn(input)) {
         if (event.type === 'session-binding') {
           const providerIdentityChanged = event.providerSessionId !== current.providerSessionId

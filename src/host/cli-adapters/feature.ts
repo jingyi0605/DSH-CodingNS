@@ -28,6 +28,13 @@ export function createCliAdaptersFeature(options: { registry?: CodingNsCliAdapte
       const commandCodeSubscription = new CommandCodeSubscriptionService()
       const subscriptions = new ProviderSubscriptionService({ commandCode: commandCodeSubscription })
       const sessionStore = new CodingNsCliSessionStore(context.services.settings === undefined ? {} : { settings: context.services.settings })
+      const nativeSessions = context.services.nativeSessions
+      if (nativeSessions !== undefined) {
+        const migration = sessionStore.migrateLegacySessions(nativeSessions.list())
+        if (migration.migrated > 0 || migration.unresolved > 0) {
+          console.info('codingns4dsh: 旧外部会话适配器迁移完成', migration)
+        }
+      }
       const registry = options.registry ?? new CodingNsCliAdapterRegistry([
         new CommandCodeDriver(),
         new ClaudeCodeDriver(),
@@ -44,13 +51,15 @@ export function createCliAdaptersFeature(options: { registry?: CodingNsCliAdapte
       })
       registry.applyEnabledSettings(context.services.settings?.get().agentAdapters)
       registry.warmCatalog()
-      const nativeSessions = context.services.nativeSessions
       if (nativeSessions !== undefined) {
         const disposeNativeEvents = nativeSessions.subscribe({
           onEvent: (session, event) => {
             const sessionId = nativeSessionId(session)
             const eventType = nativeEventType(event)
             if (sessionId === undefined || eventType === undefined) return
+            // 旧会话可能不在启动时的 SessionStore.list() 中，直到用户点击
+            // 侧栏才加载。加载事件本身携带完整快照，此时补做一次迁移。
+            if (sessionStore.get(sessionId) === undefined) sessionStore.migrateLegacySessions([session])
             const current = sessionStore.get(sessionId)
             if (current === undefined || current.status === 'archived') return
             if (eventType === 'turn/start') {
@@ -70,7 +79,11 @@ export function createCliAdaptersFeature(options: { registry?: CodingNsCliAdapte
           case 'session/get': return registry.getSession(readSessionId(payload))
           case 'session/set': return registry.setSession(readSessionId(payload), readSessionConfig(payload))
           case 'session/list': return registry.listSessions(readSessionListOptions(payload))
-          case 'session/adapter-map': return sessionStore.adapterBindings()
+          case 'session/adapter-map':
+            // DSH 历史会话的 seed 事件不会发布 session/event；每次读取映射时
+            // 重新检查当前已加载对象，覆盖“用户刚点击打开旧会话”的路径。
+            if (nativeSessions !== undefined) sessionStore.migrateLegacySessions(nativeSessions.list())
+            return sessionStore.adapterBindings()
           case 'session/archive': return registry.archiveSession(readSessionId(payload))
           case 'session/steer': return registry.steer(readSessionId(payload), readPrompt(payload), false)
           case 'session/follow-up': return registry.steer(readSessionId(payload), readPrompt(payload), true)

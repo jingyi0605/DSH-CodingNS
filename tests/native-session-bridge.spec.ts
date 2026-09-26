@@ -98,7 +98,7 @@ test('只有 SessionStore 时只复用已有会话，不创建短命会话', asy
   assert.equal(flushed, 1)
 })
 
-test('原生会话桥接把外部工具保存为只读 call/result 事件且不触发执行器', () => {
+test('原生会话桥接把外部工具保存为只读声明/call/result 事件且不触发执行器', () => {
   const events: Array<Record<string, any>> = [
     { type: 'turn/start', seq: 0, data: { turn: 3 } },
     { type: 'step/start', seq: 1, data: { turn: 3, step: 2 } },
@@ -123,18 +123,40 @@ test('原生会话桥接把外部工具保存为只读 call/result 事件且不�
     callId: 'external-1',
     name: 'read_directory',
     arguments: '{"path":"."}',
+    adapterId: 'codex',
   })
-  assert.deepEqual(handle, { sessionId: 'native-tools', turn: 3, step: 2, callId: 'external-1', callSeq: 2 })
+  assert.deepEqual(handle, { sessionId: 'native-tools', turn: 3, step: 2, callId: 'external-1', callSeq: 3 })
   assert.equal(bridge.appendToolResult?.(handle!, { output: 'a.ts', isError: false }), true)
   assert.deepEqual(events.slice(2), [
     {
-      type: 'tool/call',
+      type: 'assistant/message',
       seq: 2,
+      data: {
+        turn: 3,
+        step: 2,
+        message: {
+          id: 'external-tool-external-1-3-2',
+          role: 'assistant',
+          content: [{
+            type: 'tool-call',
+            id: 'external-1',
+            name: 'read_directory',
+            arguments: '{"path":"."}',
+          }],
+          source: { kind: 'model', plugin: 'codingns4dsh', provider: 'codex', model: 'codex' },
+        },
+        stream: [],
+      },
+      options: { surfaceOp: 'append' },
+    },
+    {
+      type: 'tool/call',
+      seq: 3,
       data: { turn: 3, step: 2, callId: 'external-1', name: 'read_directory', arguments: '{"path":"."}' },
     },
     {
       type: 'tool/result',
-      seq: 3,
+      seq: 4,
       data: {
         turn: 3,
         step: 2,
@@ -145,7 +167,7 @@ test('原生会话桥接把外部工具保存为只读 call/result 事件且不�
           source: { kind: 'tool', callId: 'external-1' },
         },
       },
-      options: { surfaceOp: 'append', sourceEventSeqs: [2] },
+      options: { surfaceOp: 'append', sourceEventSeqs: [3] },
     },
   ])
 })
@@ -221,8 +243,29 @@ test('原生会话桥接按当前 step 顺序保存外部工具 call/result 事�
   }), true)
   assert.deepEqual(events.slice(2), [
     {
-      type: 'tool/call',
+      type: 'assistant/message',
       seq: 2,
+      data: {
+        turn: 3,
+        step: 2,
+        message: {
+          id: 'external-tool-bash-1-3-2',
+          role: 'assistant',
+          content: [{
+            type: 'tool-call',
+            id: 'bash-1',
+            name: 'bash',
+            arguments: '{"command":"pwd"}',
+          }],
+          source: { kind: 'model', plugin: 'codingns4dsh', provider: 'codingns-external', model: 'external-agent' },
+        },
+        stream: [],
+      },
+      options: { surfaceOp: 'append' },
+    },
+    {
+      type: 'tool/call',
+      seq: 3,
       data: {
         turn: 3,
         step: 2,
@@ -233,7 +276,7 @@ test('原生会话桥接按当前 step 顺序保存外部工具 call/result 事�
     },
     {
       type: 'tool/result',
-      seq: 3,
+      seq: 4,
       data: {
         turn: 3,
         step: 2,
@@ -248,7 +291,7 @@ test('原生会话桥接按当前 step 顺序保存外部工具 call/result 事�
           source: { kind: 'tool', callId: 'bash-1' },
         },
       },
-      options: { surfaceOp: 'append', sourceEventSeqs: [2] },
+      options: { surfaceOp: 'append', sourceEventSeqs: [3] },
     },
   ])
 })

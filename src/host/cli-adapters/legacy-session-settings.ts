@@ -1,0 +1,88 @@
+import { readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import type { CodingNsCliSessionRecord } from '../../shared/contracts/cli-adapter.js'
+
+/** DSH 旧版设置导入文件的默认位置。 */
+export function defaultLegacySettingsPath(): string {
+  return join(homedir(), '.dsh', 'settings.yaml.imported')
+}
+
+/**
+ * 读取旧版 `codingns.cliSessions` 索引。
+ *
+ * DSH 没有向插件暴露旧设置文档的结构化读取接口，这里只解析稳定的
+ * `cliSessions` 子集，避免引入 YAML 解析器或把旧设置的其它字段带入运行时。
+ */
+export function readLegacyImportedSessionRecords(path = defaultLegacySettingsPath()): readonly CodingNsCliSessionRecord[] {
+  let text: string
+  try {
+    text = readFileSync(path, 'utf8')
+  } catch {
+    return []
+  }
+  return parseLegacyImportedSessionRecords(text)
+}
+
+/** 解析旧版设置文本，单独导出以便用固定 fixture 验证迁移规则。 */
+export function parseLegacyImportedSessionRecords(text: string): readonly CodingNsCliSessionRecord[] {
+  const lines = text.replaceAll('\r\n', '\n').split('\n')
+  const records: CodingNsCliSessionRecord[] = []
+  let inSessions = false
+  let current: Record<string, unknown> | undefined
+
+  const flush = (): void => {
+    if (current !== undefined && isSessionRecord(current)) records.push(current)
+    current = undefined
+  }
+
+  for (const line of lines) {
+    if (/^  cliSessions:\s*$/u.test(line)) {
+      flush()
+      inSessions = true
+      continue
+    }
+    if (inSessions && /^  [A-Za-z][\w-]*:\s*/u.test(line)) {
+      flush()
+      inSessions = false
+    }
+    if (!inSessions) continue
+
+    const item = /^    - dshSessionId:\s*(.*)$/u.exec(line)
+    if (item !== null) {
+      flush()
+      current = { dshSessionId: parseScalar(item[1]!) }
+      continue
+    }
+    const field = /^      ([A-Za-z][\w-]*):\s*(.*)$/u.exec(line)
+    if (field !== null && current !== undefined) current[field[1]!] = parseScalar(field[2]!)
+  }
+  flush()
+  return records
+}
+
+function isSessionRecord(value: Record<string, unknown>): value is Record<string, unknown> & CodingNsCliSessionRecord {
+  return typeof value.dshSessionId === 'string'
+    && value.dshSessionId.trim() !== ''
+    && typeof value.adapterId === 'string'
+    && value.adapterId.trim() !== ''
+    && isStatus(value.status)
+    && typeof value.createdAt === 'string'
+    && typeof value.updatedAt === 'string'
+}
+
+function isStatus(value: unknown): value is CodingNsCliSessionRecord['status'] {
+  return value === 'active' || value === 'idle' || value === 'error' || value === 'archived'
+}
+
+function parseScalar(value: string): unknown {
+  const trimmed = value.trim()
+  if (trimmed === '' || trimmed === 'null' || trimmed === '~') return undefined
+  if (trimmed === 'true') return true
+  if (trimmed === 'false') return false
+  if (/^-?\d+(?:\.\d+)?$/u.test(trimmed)) return Number(trimmed)
+  if ((trimmed.startsWith("'") && trimmed.endsWith("'")) || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+    return trimmed.slice(1, -1)
+  }
+  return trimmed
+}

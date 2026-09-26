@@ -33,12 +33,17 @@ export const workspaceSessionEnhancementFeature: CodingNsClientFeatureModule = {
     let generation = 0
     let logoDom: WorkspaceSessionLogoDomController | undefined
     let archiveDom: WorkspaceSessionArchiveDomController | undefined
+    let adapterRefreshTimer: ReturnType<typeof globalThis.setInterval> | undefined
     let disposeSubscription: (() => void) | undefined
 
     const disableLogo = (): void => {
       generation += 1
       logoDom?.dispose()
       logoDom = undefined
+      if (adapterRefreshTimer !== undefined) {
+        globalThis.clearInterval(adapterRefreshTimer)
+        adapterRefreshTimer = undefined
+      }
       clearSessionAdapters()
     }
     const enableArchive = (): void => {
@@ -62,7 +67,8 @@ export const workspaceSessionEnhancementFeature: CodingNsClientFeatureModule = {
       if (logoDom !== undefined) return
       const currentGeneration = ++generation
       logoDom = startWorkspaceSessionLogoDom()
-      void fetchSessionAdapters(context.services.rpc)
+      const refreshAdapters = (): void => {
+        void fetchSessionAdapters(context.services.rpc)
         .then((bindings) => {
           if (generation !== currentGeneration || logoDom === undefined) return
           replaceSessionAdapters(bindings)
@@ -70,6 +76,11 @@ export const workspaceSessionEnhancementFeature: CodingNsClientFeatureModule = {
           archiveDom?.refresh()
         })
         .catch(() => undefined)
+      }
+      refreshAdapters()
+      // 旧会话在 DSH 中按需加载；加载后 Host 才能识别其适配器。定期拉取
+      // 脱敏映射，确保侧栏不会一直停留在首次扫描时的默认 DSH 图标。
+      adapterRefreshTimer = globalThis.setInterval(refreshAdapters, 2_000)
     }
     const sync = (): void => {
       const workspaceSettings = context.services.settings.getSnapshot().value?.workspaceSessionEnhancement

@@ -29,6 +29,7 @@ export interface CodingNsDshExternalToolMarker {
   readonly status: 'running' | 'completed' | 'failed'
   readonly output?: string
   readonly error?: string
+  readonly adapterId?: string
 }
 
 const FIELD_LIMIT = 64 * 1024
@@ -56,6 +57,7 @@ export class CodingNsDshToolHistoryProjector {
   constructor(
     private readonly nativeSessions: CodingNsNativeSessionBridge | undefined,
     private readonly sessionId: string,
+    private readonly adapterId?: string,
   ) {
     // 工具事件必须尽早进入当前 step。新桥接优先写入原生 tool/call 与 tool/result；
     // 自定义标记只负责把这次通知立即送进实时 Conversation。不能把工具伪装成
@@ -120,6 +122,7 @@ export class CodingNsDshToolHistoryProjector {
       name: normalized.name,
       arguments: normalized.arguments,
       status,
+      ...(this.adapterId === undefined ? {} : { adapterId: this.adapterId }),
       ...(record.output === undefined ? {} : { output: record.output }),
       ...(record.error === undefined ? {} : { error: record.error }),
     }
@@ -240,7 +243,15 @@ export class CodingNsDshToolHistoryProjector {
     if (!record.externalPersisted) {
       const start: CodingNsDshExternalToolMarker = marker.phase === 'start'
         ? marker
-        : { source: marker.source, phase: 'start', callId: marker.callId, name: marker.name, arguments: marker.arguments, status: 'running' }
+        : {
+            source: marker.source,
+            phase: 'start',
+            callId: marker.callId,
+            name: marker.name,
+            arguments: marker.arguments,
+            status: 'running',
+            ...(this.adapterId === undefined ? {} : { adapterId: this.adapterId }),
+          }
       try {
         if (!append.call(this.nativeSessions, this.sessionId, start)) return false
         record.externalPersisted = true
@@ -270,6 +281,7 @@ export class CodingNsDshToolHistoryProjector {
         callId: record.callId,
         name: normalized.name,
         arguments: normalized.arguments,
+        ...(this.adapterId === undefined ? {} : { adapterId: this.adapterId }),
       })
     } catch {
       // 原生展示失败不能中断外部 Agent 的真实执行。

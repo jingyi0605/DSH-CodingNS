@@ -1,0 +1,91 @@
+import type { CodingNsCliAdapterId } from '../../shared/contracts/cli-adapter.js'
+
+/** 当前插件注册的适配器；旧日志只能从这些稳定 ID 中选择，不能猜测任意品牌。 */
+export const KNOWN_CLI_ADAPTER_IDS = new Set<CodingNsCliAdapterId>([
+  'command-code',
+  'claude-code',
+  'codex',
+  'gemini',
+  'kimi',
+  'pi',
+  'opencode',
+  'grok',
+])
+
+export interface LegacySessionAdapterEvidence {
+  readonly sessionId: string
+  readonly adapterId?: CodingNsCliAdapterId
+  readonly cwd?: string
+  readonly createdAt?: string
+  readonly external: boolean
+}
+
+/**
+ * 从 DSH 原生会话快照读取旧版外部 Agent 的适配器证据。
+ * `codingns-external` 只能证明消息来自外部 Agent；只有 source/provider 或
+ * request/context 中出现当前已知适配器 ID 时才回填，避免把 DSH 模型提供方误认成 CLI。
+ */
+export function inspectLegacySessionAdapter(value: unknown): LegacySessionAdapterEvidence | undefined {
+  const record = asRecord(value)
+  if (record === null) return undefined
+  const header = asRecord(record.header)
+  const sessionId = firstString(record.id, record.sessionId, header?.id)
+  if (sessionId === undefined) return undefined
+
+  const events = snapshotEvents(record)
+  let external = false
+  const candidates = new Set<CodingNsCliAdapterId>()
+  for (const event of events) {
+    const eventRecord = asRecord(event)
+    if (eventRecord === null) continue
+    const data = asRecord(eventRecord.data)
+    const message = data === null ? null : asRecord(data.message)
+    const source = message === null ? null : asRecord(message.source)
+    const sourceProvider = firstString(source?.adapterId, source?.provider)
+    const pluginSource = source?.plugin === 'codingns4dsh'
+    if (sourceProvider === 'codingns-external' || pluginSource) external = true
+    // 只有显式 adapterId 或插件自写的 source 才能作为来源证据；DSH 自己的
+    // model provider 不能因为名字碰巧叫 codex 就被绑定到 Codex 适配器。
+    addCandidate(candidates, firstString(source?.adapterId))
+    if (pluginSource) addCandidate(candidates, sourceProvider)
+    if (eventRecord.type === 'request/context') addCandidate(candidates, firstString(data?.adapterId, data?.provider))
+  }
+  if (!external) return undefined
+  const adapterId = candidates.size === 1 ? [...candidates][0] : undefined
+  return {
+    sessionId,
+    ...(adapterId === undefined ? {} : { adapterId }),
+    ...(typeof header?.cwd === 'string' && header.cwd.trim() ? { cwd: header.cwd.trim() } : {}),
+    ...(typeof header?.createdAt === 'number' ? { createdAt: new Date(header.createdAt).toISOString() } : {}),
+    ...(typeof header?.createdAt === 'string' && header.createdAt.trim() ? { createdAt: header.createdAt } : {}),
+    external: true,
+  }
+}
+
+function snapshotEvents(record: Record<string, unknown>): readonly unknown[] {
+  const snapshot = record.snapshotEvents
+  if (typeof snapshot === 'function') {
+    try {
+      const result = (snapshot as () => unknown)()
+      if (Array.isArray(result)) return result
+    } catch {
+      // 单个损坏会话不能阻断其余会话迁移。
+    }
+  }
+  return Array.isArray(record.events) ? record.events : []
+}
+
+function addCandidate(candidates: Set<string>, value: string | undefined): void {
+  if (value !== undefined && KNOWN_CLI_ADAPTER_IDS.has(value)) candidates.add(value)
+}
+
+function firstString(...values: unknown[]): string | undefined {
+  for (const value of values) if (typeof value === 'string' && value.trim() !== '') return value.trim()
+  return undefined
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}

@@ -19,11 +19,45 @@ import { DebugWorkspaceService } from './debug.js'
 import { detectRuntimeDshVersion, DSH_VERSION_INJECTION_NAME } from './dsh-runtime-version.js'
 import { createDshCapabilityRegistry } from '../dsh-capabilities/index.js'
 import { debugInfo } from '../shared/debug.js'
+import { repairLegacySessionLogs } from './session-migration-repair.js'
 
 export function apply(ctx?: Context): void {
   if (ctx === undefined) return
   const dshVersion = detectRuntimeDshVersion()
   debugInfo('codingns4dsh: host apply entered', { dshVersion })
+
+  // DSH 0.1.7 的官方 v3->v4 迁移器要求每个 tool/call 先有 assistant/message
+  // 声明。旧版外部 Agent 曾直接写入 tool/call，必须在任何会话 open 前修复。
+  ctx.inject(['sessionPersistence'], async (sessionCtx) => {
+    const persistence = sessionCtx.get('sessionPersistence') as unknown
+    if (!isRecord(persistence) || typeof persistence.root !== 'string') return
+    const open = persistence.open
+    if (typeof open !== 'function') return
+    let repair: Promise<unknown> | undefined
+    const repairBeforeOpen = (): Promise<unknown> => {
+      repair ??= repairLegacySessionLogs({
+        root: persistence.root as string,
+        logger: (message, error) => console.warn('codingns4dsh:', message, error),
+      }).catch((error) => {
+        console.warn('codingns4dsh: 历史会话扫描失败', error)
+        return undefined
+      })
+      return repair
+    }
+    // DSH 的 v3->v4 转换发生在 persistence.open 内部。只在启动时异步扫描
+    // 会晚于第一次点击历史会话，因此必须把修复挂到真正的读取边界之前。
+    try {
+      persistence.open = async function (...args: unknown[]): Promise<unknown> {
+        await repairBeforeOpen()
+        return open.apply(this, args)
+      }
+    } catch (error) {
+      // 某些 Host 会冻结 Service 实例；启动扫描仍然可修复磁盘上的旧日志。
+      console.warn('codingns4dsh: 无法包装 sessionPersistence.open', error)
+    }
+    const report = await repairBeforeOpen()
+    debugInfo('codingns4dsh: legacy session repair finished', report)
+  })
 
   ctx.inject(['settings', 'connection', 'webServer'], async (hostCtx) => {
     debugInfo('codingns4dsh: host inject ready', {
@@ -117,6 +151,10 @@ export function apply(ctx?: Context): void {
   })
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
 function resolveWorkspaceRoot(ctx: Context, workspaceId: string): string | null {
   try {
     const registry = ctx.get('workspaceRegistry') as { readonly list?: () => readonly Record<string, unknown>[] } | undefined
@@ -168,6 +206,17 @@ export {
   type CodingNsNativeWorkspaceController,
   type CodingNsNativeRequestContext,
 } from './native-session-bridge.js'
+export {
+  repairLegacySessionLog,
+  repairLegacySessionLogs,
+  type LegacySessionRepairOptions,
+  type LegacySessionRepairReport,
+} from './session-migration-repair.js'
+export {
+  defaultLegacySettingsPath,
+  parseLegacyImportedSessionRecords,
+  readLegacyImportedSessionRecords,
+} from './cli-adapters/legacy-session-settings.js'
 export { CommandCodeDriver } from './cli-adapters/command-code-driver.js'
 export { CommandCodeSubscriptionService, readCommandCodeApiKey } from './cli-adapters/command-code-subscription.js'
 export {

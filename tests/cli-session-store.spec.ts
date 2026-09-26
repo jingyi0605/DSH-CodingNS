@@ -2,6 +2,36 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { CodingNsCliAdapterRegistry } from '../data/build/dist/host/cli-adapters/registry.js'
 import { CodingNsCliSessionStore } from '../data/build/dist/host/cli-adapters/session-store.js'
+import { parseLegacyImportedSessionRecords } from '../data/build/dist/host/cli-adapters/legacy-session-settings.js'
+
+test('旧版导入设置中的外部会话索引可恢复', () => {
+  const records = parseLegacyImportedSessionRecords(`
+codingns:
+  cliSessions:
+    - dshSessionId: session-old
+      adapterId: codex
+      modelId: gpt-5.6-sol
+      providerSessionId: provider-old
+      rawStoreRef: /Users/jackson/.codex/session.jsonl
+      title: 写1000字的科幻小说
+      cwd: /Users/jackson/Code/头脑风暴
+      status: idle
+      createdAt: 2026-09-24T15:32:34.161Z
+      updatedAt: 2026-09-25T00:29:15.302Z
+`)
+  assert.deepEqual(records, [{
+    dshSessionId: 'session-old',
+    adapterId: 'codex',
+    modelId: 'gpt-5.6-sol',
+    providerSessionId: 'provider-old',
+    rawStoreRef: '/Users/jackson/.codex/session.jsonl',
+    title: '写1000字的科幻小说',
+    cwd: '/Users/jackson/Code/头脑风暴',
+    status: 'idle',
+    createdAt: '2026-09-24T15:32:34.161Z',
+    updatedAt: '2026-09-25T00:29:15.302Z',
+  }])
+})
 
 test('Host 会话索引串行持久化并支持归档筛选', async () => {
   const writes = []
@@ -32,6 +62,41 @@ test('Host 会话索引串行持久化并支持归档筛选', async () => {
   store.upsert('dsh-1', { adapterId: 'gemini' })
   assert.equal(store.get('dsh-1')?.providerSessionId, undefined)
   assert.equal(store.get('dsh-1')?.providerState, undefined)
+})
+
+test('旧原生外部会话只在日志明确给出适配器时自动迁移，且归档映射仍可展示', async () => {
+  const store = new CodingNsCliSessionStore()
+  const migrated = store.migrateLegacySessions([
+    {
+      id: 'legacy-codex',
+      header: { id: 'legacy-codex', cwd: '/workspace', createdAt: 1790237955435 },
+      snapshotEvents() {
+        return [
+          {
+            type: 'assistant/message',
+            data: { message: { source: { kind: 'model', provider: 'codingns-external', model: 'external-agent' } } },
+          },
+          { type: 'request/context', data: { provider: 'codex', model: 'gpt-5.6-terra' } },
+        ]
+      },
+    },
+    {
+      id: 'legacy-unknown',
+      snapshotEvents() {
+        return [{
+          type: 'assistant/message',
+          data: { message: { source: { kind: 'model', provider: 'codingns-external', model: 'external-agent' } } },
+        }]
+      },
+    },
+  ])
+
+  assert.deepEqual(migrated, { migrated: 1, unresolved: 1 })
+  assert.equal(store.get('legacy-codex')?.adapterId, 'codex')
+  assert.equal(store.get('legacy-unknown'), undefined)
+  store.archive('legacy-codex')
+  assert.deepEqual(store.adapterBindings(), [{ sessionId: 'legacy-codex', adapterId: 'codex' }])
+  await store.flush()
 })
 
 test('SessionStore 恢复时清理遗留 active，并在 Provider 重绑时丢弃旧探测状态', () => {

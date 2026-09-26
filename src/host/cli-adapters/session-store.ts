@@ -8,6 +8,8 @@ import type {
   CodingNsSessionAdapterBinding,
 } from '../../shared/contracts/cli-adapter.js'
 import type { CodingNsSettings } from '../../shared/contracts/config.js'
+import { inspectLegacySessionAdapter } from './legacy-session-adapter.js'
+import { readLegacyImportedSessionRecords } from './legacy-session-settings.js'
 
 /**
  * 可替换的会话持久化后端。
@@ -57,11 +59,16 @@ export class CodingNsCliSessionStore {
   private readonly records = new Map<string, CodingNsCliSessionRecord>()
   private readonly settings: SettingsScope<CodingNsSettings> | undefined
   private readonly persistence: CodingNsCliSessionPersistence | undefined
+  private readonly legacyImportedRecords: readonly CodingNsCliSessionRecord[]
   private writeTail: Promise<void> = Promise.resolve()
 
   constructor(options: CodingNsCliSessionStoreOptions = {}) {
     this.settings = options.settings
     this.persistence = options.persistence
+    // DSH 升级时会把旧设置保存为 settings.yaml.imported；先恢复其中的
+    // 外部会话索引，再用当前设置覆盖同 ID 记录，保证用户后续修改优先。
+    this.legacyImportedRecords = options.settings === undefined ? [] : readLegacyImportedSessionRecords()
+    for (const record of this.legacyImportedRecords) this.hydrateRecord(record, true)
     for (const record of options.settings?.get().cliSessions ?? []) this.hydrateRecord(record, true)
   }
 
@@ -69,6 +76,7 @@ export class CodingNsCliSessionStore {
   sync(records: readonly CodingNsCliSessionRecord[] | undefined): void {
     if (records === undefined) return
     this.records.clear()
+    for (const record of this.legacyImportedRecords) this.hydrateRecord(record, false)
     for (const record of records) this.hydrateRecord(record, false)
   }
 
@@ -86,10 +94,32 @@ export class CodingNsCliSessionStore {
 
   /** 浏览器会话行只需要这两个字段，Host-only 恢复信息不得跨过 RPC 边界。 */
   adapterBindings(): CodingNsSessionAdapterBinding[] {
-    return this.list().map((record) => ({
+    return this.list({ includeArchived: true }).map((record) => ({
       sessionId: record.dshSessionId,
       adapterId: record.adapterId,
     }))
+  }
+
+  /** 启动时把旧 DSH 原生会话中有明确证据的适配器回填到 Host 索引。 */
+  migrateLegacySessions(sessions: readonly unknown[]): { migrated: number; unresolved: number } {
+    let migrated = 0
+    let unresolved = 0
+    for (const session of sessions) {
+      const evidence = inspectLegacySessionAdapter(session)
+      const existing = evidence === undefined ? undefined : this.records.get(evidence.sessionId)
+      if (evidence === undefined || existing !== undefined && existing.adapterId !== 'dsh') continue
+      if (evidence.adapterId === undefined) {
+        unresolved += 1
+        continue
+      }
+      this.upsert(evidence.sessionId, {
+        adapterId: evidence.adapterId,
+        ...(evidence.cwd === undefined ? {} : { cwd: evidence.cwd }),
+        status: existing?.status ?? 'idle',
+      })
+      migrated += 1
+    }
+    return { migrated, unresolved }
   }
 
   /** 创建或更新记录；返回值是内存中的规范化记录，持久化在后台串行完成。 */
