@@ -100,6 +100,11 @@ test('Git Host 模块支持提交 Diff 和撤销最近提交', async () => {
     assert.deepEqual(diff.files, [{ path: 'README.md', oldPath: null, status: 'M', binary: false }])
     assert.match(diff.content, /second/u)
 
+    const pagedHistory = await rpc(table, 'git/history', { workspaceId: 'workspace-undo', limit: 1, offset: 1 }) as { items: readonly { commitHash: string }[]; cursor: string; nextCursor: string | null }
+    assert.equal(pagedHistory.items[0]?.commitHash, first.commitHash)
+    assert.equal(pagedHistory.cursor, '1')
+    assert.equal(pagedHistory.nextCursor, null)
+
     const undone = await rpc(table, 'git/undo', { workspaceId: 'workspace-undo' }) as { changes: readonly { path: string; staged: boolean }[] }
     assert.deepEqual(undone.changes.map((item) => [item.path, item.staged]), [['README.md', true]])
     const history = await rpc(table, 'git/history', { workspaceId: 'workspace-undo', limit: 20 }) as { items: readonly { commitHash: string }[] }
@@ -118,6 +123,8 @@ test('Git Client 与 Host 接线包含侧栏面板和所有版本 RPC', async ()
   for (const marker of ['sidebarRightTabs.register', 'sidebar.right.pane.tab', 'sidebar.right.pane.tab.title', 'git/status', 'git/commit', 'git/commit-diff', 'git/history', 'git/branches', 'git/${action}', 'buildChangeTree', 'collectTreeTargets', 'onBatchAction', '撤销目录暂存', '撤销目录变更', 'hoveredPath', 'contentGridStyle', 'commitSectionStyle', 'commitEditorRowStyle', '在这里输入提交信息', '生成提交信息', 'commitActionsStyle', '暂存全部', '查看所有版本', "onOperation('refresh')"]) {
     assert.match(source, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'))
   }
+  assert.match(source, /cached !== null && !historyExpanded\.current/u)
+  assert.match(source, /preserveExpandedHistory = action === 'git\/status'/u)
   assert.doesNotMatch(source, /sidebar\.panellist/u)
   assert.doesNotMatch(source, /name: 'main'/u)
   assert.match(source, /String\(props\.sessionId\)/u)

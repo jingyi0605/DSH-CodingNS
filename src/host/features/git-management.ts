@@ -47,7 +47,7 @@ export function createGitManagementFeature(): FeatureModule<CodingNsHostServices
           case 'discard': return discardTargets(workspaceId, root, input.targets)
           case 'commit': return commit(workspaceId, root, requiredString(input.subject, 'subject'))
           case 'commit-diff': return readCommitDiff(root, requiredString(input.commitHash, 'commitHash'))
-          case 'history': return readHistory(workspaceId, root, input.limit)
+          case 'history': return readHistory(workspaceId, root, input.limit, input.offset)
           case 'branches': return readBranches(root)
           case 'switch': return switchBranch(root, requiredString(input.branchName, 'branchName'), input.create === true)
           case 'fetch': return syncRemote(workspaceId, root, ['fetch', '--all', '--prune'])
@@ -194,13 +194,14 @@ async function undoLastCommit(workspaceId: string, root: string): Promise<GitSta
   return readStatus(workspaceId, root)
 }
 
-async function readHistory(_workspaceId: string, root: string, rawLimit: unknown): Promise<GitHistoryPage> {
-  const limit = Math.max(1, Math.min(100, Number.isSafeInteger(rawLimit) ? Number(rawLimit) : 20))
+async function readHistory(_workspaceId: string, root: string, rawLimit: unknown, rawOffset: unknown): Promise<GitHistoryPage> {
+  const limit = Math.max(1, Math.min(100, Number.isSafeInteger(rawLimit) ? Number(rawLimit) : 50))
+  const offset = Math.max(0, Math.min(1_000_000, Number.isSafeInteger(rawOffset) ? Number(rawOffset) : 0))
   let result: { stdout: string; stderr: string }
   try {
-    result = await runGit(root, ['log', `--max-count=${String(limit)}`, '--format=%H%x1f%an%x1f%aI%x1f%s%x1f%b%x1e'])
+    result = await runGit(root, ['log', `--skip=${String(offset)}`, `--max-count=${String(limit)}`, '--format=%H%x1f%an%x1f%aI%x1f%s%x1f%b%x1e'])
   } catch (error) {
-    if (isEmptyRepositoryError(error)) return { items: [], cursor: null, nextCursor: null, totalCount: 0 }
+    if (isEmptyRepositoryError(error)) return { items: [], cursor: String(offset), nextCursor: null, totalCount: 0 }
     throw error
   }
   const items: GitHistoryItem[] = []
@@ -215,7 +216,7 @@ async function readHistory(_workspaceId: string, root: string, rawLimit: unknown
   } catch (error) {
     if (!isEmptyRepositoryError(error)) throw error
   }
-  return { items, cursor: null, nextCursor: items.length < total ? items.at(-1)?.commitHash ?? null : null, totalCount: total }
+  return { items, cursor: String(offset), nextCursor: offset + items.length < total ? String(offset + items.length) : null, totalCount: total }
 }
 
 async function readBranches(root: string): Promise<GitBranchSnapshot> {
