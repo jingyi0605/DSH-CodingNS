@@ -59,8 +59,14 @@ test('终端 UI 对 rc3 缺失的 Sidebar 扩展能力走兼容分支', async ()
   assert.match(source, /registerCloseHandler\?/u)
   assert.match(source, /typeof registerCloseHandler !== 'function'/u)
   assert.match(source, /legacyCloseFallback/u)
-  assert.match(source, /specDynamic\?\.\('sidebar\.right\.tab\.guide\.entry'\)/u)
-  assert.match(source, /if \(guideEntrySlot\)/u)
+  assert.match(source, /ctx\.slots\.inject\('sidebar\.right\.tab\.guide\.entry'/u)
   assert.match(source, /info\.tab\.signal\.addEventListener\('abort'/u)
   assert.doesNotMatch(source, /PropsRuntime<'sidebar\.right\.tab\.guide\.entry'>/u)
+})
+
+test('终端 Guide Entry 交给 Slots 注入器处理延迟声明', async () => {
+  const source = await readFile(join(projectRoot, 'src/client/terminal/ui.ts'), 'utf8')
+
+  assert.match(source, /disposers\.push\(ctx\.slots\.inject\('sidebar\.right\.tab\.guide\.entry'/u)
+  assert.doesNotMatch(source, /guideEntrySlot/u)
 })

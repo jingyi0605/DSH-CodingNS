@@ -88,9 +88,6 @@ export function registerCodingNsTerminalUi(
   // alpha2 提供多 Tab 元数据和关闭 API；rc3 没有这些字段，不能直接调用。
   const legacyCloseFallback = typeof registerCloseHandler !== 'function'
   const supportsMultiple = typeof (ctx.sidebarRight as typeof ctx.sidebarRight & { readonly openTabs?: unknown }).openTabs !== 'undefined'
-  const guideEntrySlot = (ctx.slots as typeof ctx.slots & {
-    readonly specDynamic?: (name: string) => unknown
-  }).specDynamic?.('sidebar.right.tab.guide.entry') !== undefined
   disposers.push(installTerminalStyles())
   const tabDefinition = {
     id: TERMINAL_PROVIDER_ID,
@@ -115,7 +112,7 @@ export function registerCodingNsTerminalUi(
     name: 'sidebar.right.pane.tab.title', key: TERMINAL_PROVIDER_ID,
     inject: () => ({ webTerminals, locale: ctx.locale }),
   }, TerminalTitle)))
-  if (guideEntrySlot) disposers.push(ctx.slots.inject('sidebar.right.tab.guide.entry', () => ctx.slots.register({
+  disposers.push(ctx.slots.inject('sidebar.right.tab.guide.entry', () => ctx.slots.register({
     name: 'sidebar.right.tab.guide.entry', key: TERMINAL_PROVIDER_ID,
     inject: () => ({ webTerminals, locale: ctx.locale }),
   }, TerminalGuide)))
