@@ -103,6 +103,13 @@ export function usageChunk(value: unknown): CodingNsAgentEvent | null {
   )
   if (inputTokens === 0 && outputTokens === 0 && cacheReadTokens === undefined && cacheWriteTokens === undefined) return null
   const totalTokens = optionalNumberValue(usage.totalTokens ?? usage.total_tokens ?? usage.totalTokenCount)
+  const contextWindow = optionalNumberValue(usage.contextWindow ?? usage.context_window ?? usage.contextLimit ?? usage.context_limit)
+  const contextTokens = optionalNumberValue(usage.contextTokens ?? usage.context_tokens)
+  const explicitContextUsageRatio = optionalNumberValue(usage.contextUsageRatio ?? usage.context_usage_ratio)
+  const contextUsageRatio = explicitContextUsageRatio
+    ?? (contextWindow !== undefined && contextTokens !== undefined && contextWindow > 0
+      ? Number(Math.min(1, contextTokens / contextWindow).toFixed(6))
+      : undefined)
   const hasCacheBreakdown = explicitUncachedInputTokens !== undefined || cacheReadTokens !== undefined || cacheWriteTokens !== undefined
   const cachedInputTokens = (cacheReadTokens ?? 0) + (cacheWriteTokens ?? 0)
   const inputExcludesCache = explicitUncachedInputTokens !== undefined || cacheReadInputTokens !== undefined || cacheWriteInputTokens !== undefined
@@ -115,6 +122,9 @@ export function usageChunk(value: unknown): CodingNsAgentEvent | null {
     ...(cacheWriteTokens === undefined ? {} : { cacheWriteTokens }),
     ...(hasCacheBreakdown ? { uncachedInputTokens: inputExcludesCache ? inputTokens : Math.max(0, inputTokens - cachedInputTokens) } : {}),
     ...(totalTokens === undefined && !hasCacheBreakdown ? {} : { totalTokens: totalTokens ?? fullInputTokens + outputTokens }),
+    ...(contextWindow === undefined ? {} : { contextWindow }),
+    ...(contextTokens === undefined ? {} : { contextTokens }),
+    ...(contextUsageRatio === undefined ? {} : { contextUsageRatio }),
     ...(cacheReadTokens === undefined || fullInputTokens <= 0
       ? {}
       : { cacheHitRate: Number((cacheReadTokens / fullInputTokens * 100).toFixed(4)) }),

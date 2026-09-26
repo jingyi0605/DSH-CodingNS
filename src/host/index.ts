@@ -231,6 +231,18 @@ export {
   type Sub2ApiSource,
   type Sub2ApiUsageOptions,
 } from './cli-adapters/provider-subscription.js'
+export { OfficialProviderSubscriptionService, type OfficialProviderSubscriptionOptions } from './cli-adapters/official-provider-subscription.js'
+export {
+  MODEL_PROVIDER_DEFINITIONS,
+  identifyModelProvider,
+  normalizeProviderBaseUrl,
+  normalizeProviderName,
+  thirdPartyProvider,
+  type ProviderDefinition,
+  type ProviderIdentity,
+  type ProviderSubscriptionCapability,
+  type ProviderSubscriptionReader,
+} from './cli-adapters/provider-registry.js'
 export { ClaudeCodeDriver } from './cli-adapters/claude-driver.js'
 export { KimiCliDriver } from './cli-adapters/kimi-driver.js'
 export { GeminiCliDriver } from './cli-adapters/gemini-driver.js'

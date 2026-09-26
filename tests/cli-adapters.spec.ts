@@ -12,6 +12,7 @@ import { CodingNsRpcTable } from '../data/build/dist/host/rpc-table.js'
 import { FeatureRegistry } from '../data/build/dist/features/registry.js'
 import { CommandCodeSubscriptionService } from '../data/build/dist/host/cli-adapters/command-code-subscription.js'
 import { ClaudeCodeSubscriptionService, DeepseekSubscriptionService, OpenCodeSubscriptionService, ProviderSubscriptionService, Sub2ApiUsageService } from '../data/build/dist/host/cli-adapters/provider-subscription.js'
+import { identifyModelProvider, normalizeProviderBaseUrl } from '../data/build/dist/host/cli-adapters/provider-registry.js'
 
 test('Command Code 驱动只把带版本号的候选命令视为已安装', async () => {
   const calls: string[][] = []
@@ -208,7 +209,18 @@ test('官方 DeepSeek 订阅服务读取多币种余额并且不返回 API key',
   assert.equal(result?.deepseek?.isAvailable, true)
   assert.deepEqual(result?.deepseek?.balances[1], { currency: 'USD', totalBalance: 13.63, grantedBalance: 1, toppedUpBalance: 12.63 })
   assert.equal(result?.deepseek?.upstreamUrl, 'https://api.deepseek.com')
+  assert.equal(result?.provider?.id, 'deepseek')
+  assert.equal(result?.provider?.capability, 'official-balance')
   assert.doesNotMatch(JSON.stringify(result), /deepseek-secret/u)
+})
+
+test('模型提供商必须按名称和 baseURL 联合识别', () => {
+  assert.equal(normalizeProviderBaseUrl('https://api.deepseek.com/v1/'), 'https://api.deepseek.com')
+  assert.equal(identifyModelProvider({ name: 'deepseek', baseUrl: 'https://api.deepseek.com/v1' })?.id, 'deepseek')
+  assert.equal(identifyModelProvider({ name: 'deepseek', baseUrl: 'https://proxy.example.test/v1' }), undefined)
+  assert.equal(identifyModelProvider({ name: 'deepseek', baseUrl: 'https://api.deepseek.com/v1' })?.reader, 'deepseek-balance')
+  assert.equal(identifyModelProvider({ name: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1' })?.id, 'openrouter')
+  assert.equal(identifyModelProvider({ name: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1' })?.reader, 'openrouter-balance')
 })
 
 test('DSH 官方来源走 DeepSeek 余额接口，第三方来源仍走 Sub2API', async () => {
@@ -232,6 +244,7 @@ test('DSH 官方来源走 DeepSeek 余额接口，第三方来源仍走 Sub2API'
       sources: { dsh: { baseUrl: 'https://sub2api.example.test', apiKey: 'upstream-secret' } },
       fetch: (async (url: string) => {
         if (url === 'https://sub2api.example.test/logo.svg') return new Response('', { status: 404 })
+        if (url.startsWith('https://cdn.simpleicons.org/')) return new Response('', { status: 404 })
         sub2apiCalls += 1
         assert.equal(url, 'https://sub2api.example.test/v1/usage')
         return new Response(JSON.stringify({ balance: 10, usage: { today: {}, total: {} } }), { status: 200 })
@@ -314,6 +327,41 @@ test('Codex 检测到第三方上游但 Sub2API 不可用时不回退官方订�
   })
   assert.equal(await service.read('codex'), null)
   assert.equal(officialReaderCalled, false)
+})
+
+test('Codex 官方来源允许 Sub2API 探测失败后回退原生订阅', () => {
+  const service = new Sub2ApiUsageService({
+    sources: { codex: { baseUrl: 'https://api.openai.com/v1', apiKey: 'official-key' } },
+  })
+  assert.equal(service.hasThirdPartySource('codex'), false)
+})
+
+test('Codex 配置读取 model provider 的第三方 base_url 和 bearer token', async () => {
+  const homeDirectory = mkdtempSync(join(tmpdir(), 'codingns4dsh-codex-provider-'))
+  const previousHome = process.env.CODEX_HOME
+  process.env.CODEX_HOME = homeDirectory
+  writeFileSync(join(homeDirectory, 'config.toml'), [
+    'model_provider = "custom"',
+    '',
+    '[model_providers.custom]',
+    'base_url = "https://upstream.example.test"',
+    'experimental_bearer_token = "provider-secret"',
+  ].join('\n'), 'utf8')
+  try {
+    const service = new Sub2ApiUsageService({
+      fetch: (async (url: string, init?: RequestInit) => {
+        assert.equal(url, 'https://upstream.example.test/v1/usage')
+        assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer provider-secret')
+        return new Response('{}', { status: 401 })
+      }) as typeof fetch,
+    })
+    assert.equal(await service.read('codex'), null)
+    assert.equal(service.hasThirdPartySource('codex'), true)
+  } finally {
+    if (previousHome === undefined) delete process.env.CODEX_HOME
+    else process.env.CODEX_HOME = previousHome
+    rmSync(homeDirectory, { recursive: true, force: true })
+  }
 })
 
 test('OpenCode 订阅服务只识别本地认证而不伪造额度', async () => {

@@ -2,7 +2,9 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
-import type { CliSubscriptionUsage, CliSubscriptionWindow, DeepseekBalance, DeepseekUsage, Sub2ApiDailyUsage, Sub2ApiModelUsage, Sub2ApiUsage, Sub2ApiUsagePoint } from '../../shared/contracts/subscription.js'
+import type { CliSubscriptionProvider, CliSubscriptionUsage, CliSubscriptionWindow, DeepseekBalance, DeepseekUsage, Sub2ApiDailyUsage, Sub2ApiModelUsage, Sub2ApiUsage, Sub2ApiUsagePoint } from '../../shared/contracts/subscription.js'
+import { identifyModelProvider, normalizeProviderBaseUrl, thirdPartyProvider, type ProviderDefinition } from './provider-registry.js'
+import { OfficialProviderSubscriptionService, type OfficialProviderSubscriptionOptions } from './official-provider-subscription.js'
 import { JsonRpcProcess } from './json-rpc-process.js'
 import { detectBinary } from './rpc-driver-utils.js'
 
@@ -16,6 +18,7 @@ export class ProviderSubscriptionService {
   readonly opencode: OpenCodeSubscriptionService
   readonly sub2api: Sub2ApiUsageService
   readonly deepseek: DeepseekSubscriptionService
+  readonly official: OfficialProviderSubscriptionService
 
   constructor(options: ProviderSubscriptionOptions = {}) {
     this.commandCode = options.commandCode
@@ -24,6 +27,7 @@ export class ProviderSubscriptionService {
     this.opencode = new OpenCodeSubscriptionService(options.opencode)
     this.sub2api = new Sub2ApiUsageService(options.sub2api)
     this.deepseek = new DeepseekSubscriptionService(options.deepseek)
+    this.official = new OfficialProviderSubscriptionService(options.official)
   }
 
   read(adapterId: string, providerId?: string): Promise<CliSubscriptionUsage | null> {
@@ -41,23 +45,31 @@ export class ProviderSubscriptionService {
   }
 
   private async readDsh(providerId?: string): Promise<CliSubscriptionUsage | null> {
-    if (isOfficialDeepseekProvider(providerId)) return this.deepseek.read()
-    if (isThirdPartyDeepseekProvider(providerId)) return this.sub2api.read('dsh', providerId)
+    const currentProviderId = providerId ?? resolveDshDefaultProvider()
+    const configuredSource = resolveDshProviderSource(currentProviderId)
+    const matchedProvider = identifyModelProvider({ name: currentProviderId, baseUrl: configuredSource?.baseUrl })
+    if (matchedProvider?.reader === 'openrouter-balance' || matchedProvider?.reader === 'minimax-usage' || matchedProvider?.reader === 'zai-usage' || matchedProvider?.reader === 'github-copilot-usage') {
+      return this.official.read(currentProviderId, configuredSource)
+    }
+    if (matchedProvider?.reader === 'deepseek-balance' && isOfficialDeepseekSource(currentProviderId, configuredSource)) return this.deepseek.read(configuredSource ?? undefined)
+    if (matchedProvider?.reader === 'sub2api') return this.sub2api.read('dsh', currentProviderId)
+    // 已识别的官方提供商但没有可用读取器时，不尝试把官方 API 当成 Sub2API。
+    if (matchedProvider !== undefined && configuredSource !== null) return null
+    if (isThirdPartyDeepseekProvider(currentProviderId)) return this.sub2api.read('dsh', currentProviderId)
     // 明确配置了第三方来源时，始终沿用 sub2api 适配器，避免把失败的上游误判为官方余额。
     const hasThirdPartySource = this.sub2api.hasSource('dsh')
     if (hasThirdPartySource) return this.sub2api.read('dsh')
-    return this.deepseek.read()
+    const official = await this.deepseek.read()
+    return official === null || matchedProvider === undefined ? official : withProvider(official, matchedProvider, configuredSource?.baseUrl)
   }
 
   private async readSub2ApiFirst(adapterId: string): Promise<CliSubscriptionUsage | null> {
     // 已配置第三方上游时，官方额度接口没有意义；即使 Sub2API 探测失败也必须隐藏，
     // 不能把旧的官方订阅窗口误显示成当前上游的用量。
-    const hasThirdPartySource = this.sub2api.hasSource(adapterId)
-    const upstream = await this.sub2api.read(adapterId)
-    if (upstream !== null) return upstream
-    if (hasThirdPartySource) return null
-    if (adapterId === 'codex') return this.codex.read()
-    if (adapterId === 'claude-code') return this.claudeCode.read()
+    const hasThirdPartySource = this.sub2api.hasThirdPartySource(adapterId)
+    if (hasThirdPartySource) return this.sub2api.read(adapterId)
+    if (adapterId === 'codex') return this.codex.read().then((usage) => usage === null ? null : withProvider(usage, identifyModelProvider({ name: 'openai-codex' }), ''))
+    if (adapterId === 'claude-code') return this.claudeCode.read().then((usage) => usage === null ? null : withProvider(usage, identifyModelProvider({ name: 'anthropic' }), ''))
     return null
   }
 }
@@ -69,6 +81,7 @@ export interface ProviderSubscriptionOptions {
   readonly opencode?: OpenCodeSubscriptionOptions
   readonly sub2api?: Sub2ApiUsageOptions
   readonly deepseek?: DeepseekSubscriptionOptions
+  readonly official?: OfficialProviderSubscriptionOptions
 }
 
 export interface SubscriptionReader { read(): Promise<CliSubscriptionUsage | null> }
@@ -128,6 +141,7 @@ export class DeepseekSubscriptionService {
         rateLimitReachedType: null,
         resetCredits: null,
         capturedAt: new Date().toISOString(),
+        provider: providerSummary(identifyModelProvider({ name: 'deepseek', baseUrl }), baseUrl, await readLogoDataUrl(identifyModelProvider({ name: 'deepseek', baseUrl })?.logoUrl ?? '', this.request, this.timeoutMs)),
         deepseek: usage,
       }
     } catch {
@@ -162,17 +176,26 @@ export class Sub2ApiUsageService {
     return resolveSub2ApiSources(adapterId, providerId).length > 0
   }
 
+  /** 只判断是否存在第三方上游；官方 Codex/Claude 源必须允许回退原生订阅读取器。 */
+  hasThirdPartySource(adapterId: string, providerId?: string): boolean {
+    const configured = this.configuredSources?.[adapterId as keyof NonNullable<Sub2ApiUsageOptions['sources']>]
+    const sources = configured === undefined
+      ? resolveSub2ApiSources(adapterId, providerId)
+      : Array.isArray(configured) ? configured : [configured]
+    return sources.some((source) => !isOfficialAgentSource(adapterId, source))
+  }
+
   async read(adapterId: string, providerId?: string): Promise<CliSubscriptionUsage | null> {
     const configured = this.configuredSources?.[adapterId as keyof NonNullable<Sub2ApiUsageOptions['sources']>]
     const sources = configured === undefined ? resolveSub2ApiSources(adapterId, providerId) : Array.isArray(configured) ? configured : [configured]
     for (const source of sources) {
-      const result = await this.readSource(source)
+      const result = await this.readSource(source, providerId)
       if (result !== null) return result
     }
     return null
   }
 
-  private async readSource(source: Sub2ApiSource): Promise<CliSubscriptionUsage | null> {
+  private async readSource(source: Sub2ApiSource, providerId?: string): Promise<CliSubscriptionUsage | null> {
     const baseUrl = source.baseUrl.trim().replace(/\/+$/u, '')
     const usagePath = /\/v1$/u.test(baseUrl) ? '/usage' : '/v1/usage'
     const controller = new AbortController()
@@ -187,7 +210,9 @@ export class Sub2ApiUsageService {
       if (usage === null) return null
       const logoUrl = buildLogoUrl(baseUrl)
       const logoDataUrl = logoUrl === '' ? '' : await readLogoDataUrl(logoUrl, this.request, this.timeoutMs)
-      return { authenticated: true, planType: usage.planName, primary: null, secondary: null, monthly: null, rateLimitReachedType: null, resetCredits: null, capturedAt: new Date().toISOString(), sub2api: { ...usage, logoUrl, logoDataUrl } }
+      const providerDefinition = identifyModelProvider({ name: providerId, baseUrl }) ?? thirdPartyProvider({ name: providerId, baseUrl })
+      const providerLogoDataUrl = logoDataUrl || await readLogoDataUrl(providerDefinition.logoUrl, this.request, this.timeoutMs)
+      return { authenticated: true, planType: usage.planName, primary: null, secondary: null, monthly: null, rateLimitReachedType: null, resetCredits: null, capturedAt: new Date().toISOString(), provider: providerSummary(providerDefinition, baseUrl, providerLogoDataUrl, 'sub2api'), sub2api: { ...usage, logoUrl, logoDataUrl } }
     } catch {
       return null
     } finally {
@@ -386,11 +411,10 @@ function hasSubscriptionWindow(value: CliSubscriptionUsage | null): value is Cli
 }
 
 function hasThirdPartyCodexConfig(homeDirectory: string): boolean {
-  if (textValue(process.env.OPENAI_API_KEY) !== null) return true
   const config = readText(join(homeDirectory, 'config.toml'))
-  if (config === null) return false
-  const baseUrls = [...config.matchAll(/^\s*base_url\s*=\s*["']([^"']+)["']/gmu)].map((match) => match[1] ?? '')
-  return baseUrls.some((value) => !isOfficialOpenAiUrl(value))
+  const configuredBaseUrl = config === null ? null : readCodexBaseUrl(config)
+  const environmentBaseUrl = textValue(process.env.OPENAI_BASE_URL)
+  return [configuredBaseUrl, environmentBaseUrl].some((value) => value !== null && !isOfficialOpenAiUrl(value))
 }
 
 function hasThirdPartyClaudeConfig(homeDirectory: string): boolean {
@@ -493,7 +517,7 @@ function resolveDeepseekSources(): Sub2ApiSource[] {
 
 function resolveDshProviderSource(providerId: string | undefined): Sub2ApiSource | null {
   const normalized = providerId?.trim()
-  if (normalized === undefined || normalized === '' || isOfficialDeepseekProvider(normalized)) return null
+  if (normalized === undefined || normalized === '') return null
   const envPrefix = normalized.replace(/[^a-z0-9]+/giu, '_').toUpperCase()
   const envBaseUrl = textValue(process.env[`${envPrefix}_BASE_URL`])
   const envApiKey = textValue(process.env[`${envPrefix}_API_KEY`])
@@ -504,6 +528,22 @@ function resolveDshProviderSource(providerId: string | undefined): Sub2ApiSource
     if (source !== null) return source
   }
   return null
+}
+
+function resolveDshDefaultProvider(): string | undefined {
+  const dshHome = process.env.DSH_HOME ?? join(homedir(), '.dsh')
+  for (const path of [join(dshHome, 'settings.yaml'), join(dshHome, 'settings.yaml.imported')]) {
+    const text = readText(path)
+    if (text === null) continue
+    const start = text.search(/^agent-default-model:\s*$/mu)
+    if (start < 0) continue
+    const rest = text.slice(start)
+    const endMatch = /^\S[^\n]*$/mu.exec(rest.slice(1))
+    const block = endMatch === null ? rest : rest.slice(0, endMatch.index + 1)
+    const provider = yamlScalar(block.match(/^\s+provider:\s*(.+)$/mu)?.[1])
+    if (provider !== null) return provider
+  }
+  return undefined
 }
 
 function readDshProviderYaml(path: string, providerId: string): Sub2ApiSource | null {
@@ -532,8 +572,30 @@ function isOfficialDeepseekProvider(providerId: string | undefined): boolean {
   return /^(?:deepseek(?:-official)?|official-deepseek)$/iu.test(providerId.trim())
 }
 
+/** 官方接口必须同时满足提供商名称和官方 baseURL，避免第三方代理冒充官方。 */
+function isOfficialDeepseekSource(providerId: string | undefined, source: Sub2ApiSource | null): boolean {
+  if (source === null || !isOfficialDeepseekUrl(source.baseUrl)) return false
+  return providerId === undefined || isOfficialDeepseekProvider(providerId)
+}
+
 function isThirdPartyDeepseekProvider(providerId: string | undefined): boolean {
   return providerId !== undefined && providerId.trim() !== '' && !isOfficialDeepseekProvider(providerId)
+}
+
+function providerSummary(definition: ProviderDefinition | undefined, baseUrl: string, logoDataUrl: string, capability?: CliSubscriptionProvider['capability']): CliSubscriptionProvider {
+  const resolved = definition ?? thirdPartyProvider({ baseUrl })
+  return {
+    id: resolved.id,
+    displayName: resolved.displayName,
+    baseUrl: sanitizeUpstreamUrl(baseUrl),
+    capability: capability ?? resolved.capability,
+    logoUrl: resolved.logoUrl,
+    ...(logoDataUrl === '' ? {} : { logoDataUrl }),
+  }
+}
+
+function withProvider(usage: CliSubscriptionUsage, definition: ProviderDefinition | undefined, baseUrl = ''): CliSubscriptionUsage {
+  return { ...usage, provider: providerSummary(definition, baseUrl, '') }
 }
 
 function resolveSub2ApiSources(adapterId: string, providerId?: string): Sub2ApiSource[] {
@@ -545,9 +607,7 @@ function resolveSub2ApiSources(adapterId: string, providerId?: string): Sub2ApiS
   if (adapterId === 'codex') {
     const home = process.env.CODEX_HOME ?? join(homedir(), '.codex')
     const config = readText(join(home, 'config.toml')) ?? ''
-    const baseUrl = config.match(/^\s*base_url\s*=\s*["']([^"']+)["']/mu)?.[1]
-    const key = textValue(readJsonValue(join(home, 'auth.json'), 'OPENAI_API_KEY'))
-    add(baseUrl === undefined || key === null ? null : { baseUrl, apiKey: key })
+    add(readCodexSource(home, config))
   }
   if (adapterId === 'claude-code') {
     const home = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude')
@@ -585,6 +645,52 @@ function resolveSub2ApiSources(adapterId: string, providerId?: string): Sub2ApiS
     add(findConfigSource(readJson(join(homedir(), '.grok', 'config.json'))))
   }
   return sources
+}
+
+function readCodexSource(homeDirectory: string, config: string): Sub2ApiSource | null {
+  const baseUrl = readCodexBaseUrl(config) ?? textValue(process.env.OPENAI_BASE_URL)
+  if (baseUrl === null) return null
+  const provider = tomlScalar(config, 'model_provider')
+  const section = provider === null ? '' : tomlSection(config, `model_providers.${provider}`)
+  const token = tomlScalar(section, 'experimental_bearer_token')
+    ?? tomlScalar(section, 'api_key')
+    ?? (() => {
+      const environmentName = tomlScalar(section, 'api_key_env')
+      return environmentName === null ? null : textValue(process.env[environmentName])
+    })()
+    ?? textValue(readJsonValue(join(homeDirectory, 'auth.json'), 'OPENAI_API_KEY'))
+    ?? textValue(process.env.OPENAI_API_KEY)
+  return token === null ? null : { baseUrl, apiKey: token }
+}
+
+function readCodexBaseUrl(config: string): string | null {
+  const provider = tomlScalar(config, 'model_provider')
+  const section = provider === null ? '' : tomlSection(config, `model_providers.${provider}`)
+  return tomlScalar(section, 'base_url') ?? tomlScalar(config, 'base_url')
+}
+
+function tomlSection(source: string, name: string): string {
+  if (source === '') return ''
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+  const start = source.search(new RegExp(`^\\[${escaped}\\]\\s*$`, 'mu'))
+  if (start < 0) return ''
+  const rest = source.slice(start)
+  const next = /^\[[^\n]+\]\s*$/mu.exec(rest.slice(1))
+  return next === null ? rest : rest.slice(0, next.index + 1)
+}
+
+function tomlScalar(source: string, key: string): string | null {
+  if (source === '') return null
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+  const match = new RegExp(`^\\s*${escaped}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^#\\s]+))`, 'mu').exec(source)
+  const value = match?.[1] ?? match?.[2] ?? match?.[3]
+  return textValue(value)
+}
+
+function isOfficialAgentSource(adapterId: string, source: Sub2ApiSource): boolean {
+  if (adapterId === 'codex') return isOfficialOpenAiUrl(source.baseUrl)
+  if (adapterId === 'claude-code') return isOfficialAnthropicUrl(source.baseUrl)
+  return false
 }
 
 function isOfficialDeepseekUrl(value: string): boolean {

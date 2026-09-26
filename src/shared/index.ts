@@ -136,10 +136,12 @@ export type {
   GitStatus,
 } from './contracts/git.js'
 export type {
+  CliSubscriptionProvider,
   CliSubscriptionUsage,
   CliSubscriptionWindow,
   DeepseekBalance,
   DeepseekUsage,
+  ProviderBalanceUsage,
   Sub2ApiDailyUsage,
   Sub2ApiModelUsage,
   Sub2ApiUsage,

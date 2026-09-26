@@ -26,10 +26,24 @@ export interface CliSubscriptionUsage {
     }[]
   }
   readonly capturedAt: string
+  /** 统一模型提供商摘要；同一提供商可被多个 Agent 复用。 */
+  readonly provider?: CliSubscriptionProvider
   /** 第三方上游的账户余额和用量摘要；原始 API key 永不进入此结构。 */
   readonly sub2api?: Sub2ApiUsage
   /** 官方 DeepSeek API 的账户余额摘要；原始 API key 永不进入此结构。 */
   readonly deepseek?: DeepseekUsage
+  /** 其他官方模型提供商的账户余额/用量摘要；原始 API key 永不进入此结构。 */
+  readonly providerBalance?: ProviderBalanceUsage
+}
+
+/** 订阅归属的模型提供商，不包含任何凭据。 */
+export interface CliSubscriptionProvider {
+  readonly id: string
+  readonly displayName: string
+  readonly baseUrl: string
+  readonly capability: 'official-balance' | 'official-usage' | 'subscription-window' | 'sub2api' | 'unsupported'
+  readonly logoUrl: string
+  readonly logoDataUrl?: string
 }
 
 /** 官方 DeepSeek API 返回的单个币种余额。金额单位由 currency 指定。 */
@@ -45,6 +59,25 @@ export interface DeepseekUsage {
   readonly upstreamUrl: string
   readonly isAvailable: boolean | null
   readonly balances: readonly DeepseekBalance[]
+}
+
+/** 官方提供商账户余额或 Coding Plan 余量的统一安全摘要。 */
+export interface ProviderBalanceUsage {
+  readonly upstreamUrl: string
+  readonly currency: string | null
+  readonly unit: string | null
+  readonly balance: number | null
+  readonly remaining: number | null
+  readonly used: number | null
+  readonly total: number | null
+  readonly requests: number | null
+  readonly inputTokens: number | null
+  readonly outputTokens: number | null
+  readonly planName: string | null
+  readonly details: readonly {
+    readonly label: string
+    readonly value: string | number
+  }[]
 }
 
 export interface Sub2ApiUsagePoint {

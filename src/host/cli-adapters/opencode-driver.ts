@@ -43,6 +43,7 @@ export class OpenCodeDriver implements CodingNsCliDriver {
   /** Provider 会话的实际工作目录；目录变化时禁止复用旧会话。 */
   private readonly sessionCwds = new Map<string, string>()
   private readonly interactionTargets = new Map<string, string>()
+  private readonly modelContextWindows = new Map<string, number>()
 
   constructor(options: OpenCodeDriverOptions = {}) {
     this.binaries = options.binaries ?? DEFAULT_BINARIES
@@ -69,6 +70,7 @@ export class OpenCodeDriver implements CodingNsCliDriver {
       try {
         const response = await this.http.json<unknown>(`${server}${path}`)
         if (!response.data || response.status < 200 || response.status >= 300) continue
+        rememberModelContextWindows(this.modelContextWindows, response.data)
         const catalog = parseModelCatalog(response.data)
         if (catalog.groups.length > 0) return catalog
       } catch { /* OpenCode 版本间接口不同，继续尝试其他路径。 */ }
@@ -118,6 +120,7 @@ export class OpenCodeDriver implements CodingNsCliDriver {
       sessionId = await this.createSession(server, input)
       this.sessions.set(input.sessionId, sessionId)
     }
+    const contextWindow = await this.resolveModelContextWindow(server, input.modelId)
     if (input.cwd?.trim()) this.sessionCwds.set(sessionId, input.cwd.trim())
     this.interactionTargets.set(input.sessionId, server)
 
@@ -171,11 +174,17 @@ export class OpenCodeDriver implements CodingNsCliDriver {
               const pending = pendingMessageParts.get(messageRole.id) ?? []
               pendingMessageParts.delete(messageRole.id)
               for (const pendingPart of pending) {
-                const chunk = eventToChunk(pendingPart, cumulative, assistantMessageIds, partTypes)
+                const chunk = eventToChunk(pendingPart, cumulative, assistantMessageIds, partTypes, contextWindow)
                 if (chunk !== null) { emitted = true; yield chunk }
               }
             } else {
               pendingMessageParts.delete(messageRole.id)
+            }
+            // message.updated 同时承载 assistant 的最终 tokens。角色识别后
+            // 不能直接跳过，否则 OpenCode 的 token/context 统计会被吞掉。
+            if (messageRole.role === 'assistant') {
+              const chunk = eventToChunk(parsed, cumulative, assistantMessageIds, partTypes, contextWindow)
+              if (chunk !== null) { emitted = true; yield chunk }
             }
             continue
           }
@@ -186,7 +195,7 @@ export class OpenCodeDriver implements CodingNsCliDriver {
             // assistant 消息结算后才投影，否则原生工具节点会被追加到正文底部。
             // 用户消息没有 tool 字段，因此仍然暂存并等待 role 校验。
             if (isOpenCodeToolEvent(parsed)) {
-              const chunk = eventToChunk(parsed, cumulative, undefined, partTypes)
+              const chunk = eventToChunk(parsed, cumulative, undefined, partTypes, contextWindow)
               if (chunk !== null) {
                 emitted = true
                 yield chunk
@@ -199,7 +208,7 @@ export class OpenCodeDriver implements CodingNsCliDriver {
             continue
           }
           if (messageId !== undefined && !assistantMessageIds.has(messageId)) continue
-          const chunk = eventToChunk(parsed, cumulative, assistantMessageIds, partTypes)
+              const chunk = eventToChunk(parsed, cumulative, assistantMessageIds, partTypes, contextWindow)
           if (chunk !== null) {
             emitted = true
             yield chunk
@@ -213,7 +222,7 @@ export class OpenCodeDriver implements CodingNsCliDriver {
       if (!finished && !aborted) {
         const response = await send
         if (sendError !== null && !aborted) throw sendError
-        for (const chunk of responseChunks(response, cumulative, partTypes)) { emitted = true; yield chunk }
+          for (const chunk of responseChunks(response, cumulative, partTypes, contextWindow)) { emitted = true; yield chunk }
       }
       if (aborted || input.signal?.aborted) yield { type: 'finish', reason: 'cancel' }
       else if (finished || emitted) yield { type: 'finish', reason: 'stop' }
@@ -250,6 +259,7 @@ export class OpenCodeDriver implements CodingNsCliDriver {
   dispose(): void {
     this.sessions.clear()
     this.sessionCwds.clear()
+    this.modelContextWindows.clear()
     for (const managed of this.managedServers.values()) terminateChildProcess(managed.child)
     this.managedServers.clear()
     this.cachedBinary = null
@@ -304,6 +314,20 @@ export class OpenCodeDriver implements CodingNsCliDriver {
 
   private async abortSession(server: string, sessionId: string): Promise<void> {
     try { await this.http.json(`${server}/session/${encodeURIComponent(sessionId)}/abort`, { method: 'POST' }) } catch { /* 取消请求尽力而为 */ }
+  }
+
+  private async resolveModelContextWindow(server: string, modelId: string | undefined): Promise<number | undefined> {
+    if (modelId === undefined) return undefined
+    const known = this.modelContextWindows.get(modelId)
+    if (known !== undefined) return known
+    try {
+      const response = await this.http.json<unknown>(`${server}/config/providers`)
+      if (response.status < 200 || response.status >= 300) return undefined
+      rememberModelContextWindows(this.modelContextWindows, response.data)
+      return this.modelContextWindows.get(modelId)
+    } catch {
+      return undefined
+    }
   }
 
   private async ensureServer(probeOnly: boolean, cwd: string | undefined): Promise<string | null> {
@@ -392,6 +416,39 @@ function parseOpenCodeModel(modelId: string | undefined): { providerID: string; 
   return { providerID: modelId!.slice(0, separator), modelID: modelId!.slice(separator + 1) }
 }
 
+/** 从 OpenCode provider 配置缓存每个模型的上下文窗口。 */
+function rememberModelContextWindows(target: Map<string, number>, value: unknown): void {
+  const root = asRecord(value)
+  const rawProviders = root?.providers
+  const providers: Array<[string, Record<string, any>]> = []
+  if (Array.isArray(rawProviders)) {
+    for (const raw of rawProviders) {
+      const provider = asRecord(raw)
+      if (provider !== null && typeof provider.id === 'string') providers.push([provider.id, provider])
+    }
+  } else {
+    const providerMap = asRecord(rawProviders) ?? root
+    if (providerMap !== null) {
+      for (const [id, raw] of Object.entries(providerMap)) {
+        const provider = asRecord(raw)
+        if (provider !== null) providers.push([id, provider])
+      }
+    }
+  }
+  for (const [providerId, provider] of providers) {
+    const models = asRecord(provider.models)
+    if (models === null) continue
+    for (const [modelId, rawModel] of Object.entries(models)) {
+      const model = asRecord(rawModel)
+      const limit = asRecord(model?.limit)
+      const context = limit?.context ?? model?.contextWindow ?? model?.context_window
+      if (typeof context !== 'number' || !Number.isFinite(context) || context <= 0) continue
+      target.set(`${providerId}/${modelId}`, context)
+      target.set(modelId, context)
+    }
+  }
+}
+
 function readProviderDirectory(record: Record<string, any> | null): string | undefined {
   const value = record?.directory ?? record?.cwd
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined
@@ -426,6 +483,7 @@ function eventToChunk(
   cumulative: Map<string, number>,
   assistantMessageIds?: ReadonlySet<string>,
   partTypes?: Map<string, string>,
+  contextWindow?: number,
 ): CodingNsAgentEvent | null {
   const type = typeof event.type === 'string' ? event.type : ''
   const properties = asRecord(event.properties)
@@ -503,23 +561,41 @@ function eventToChunk(
       ...(detail !== undefined ? { detail } : {}),
     }
   }
-  const usage = asRecord(event.usage) ?? asRecord(part.usage) ?? readOpenCodeTokenUsage(properties)
+  const usage = asRecord(event.usage) ?? asRecord(part.usage) ?? readOpenCodeTokenUsage(properties, contextWindow)
   if (usage !== null) return usageChunk(usage)
   return null
 }
 
 /** OpenCode 将最终用量放在 message.updated.properties.info.tokens。 */
-function readOpenCodeTokenUsage(properties: Record<string, unknown> | null): Record<string, unknown> | null {
+function readOpenCodeTokenUsage(properties: Record<string, unknown> | null, contextWindow?: number): Record<string, unknown> | null {
   const info = asRecord(properties?.info)
   const tokens = asRecord(info?.tokens)
   if (tokens === null) return null
   const cache = asRecord(tokens.cache)
+  const model = asRecord(info?.model)
+  const modelLimit = asRecord(model?.limit)
+  const input = tokens.input ?? tokens.input_tokens
+  const cacheRead = cache?.read ?? tokens.cache_read_tokens ?? tokens.cacheReadTokens
+  const cacheWrite = cache?.write ?? tokens.cache_write_tokens ?? tokens.cacheWriteTokens
+  const embeddedContextWindow = modelLimit?.context
+    ?? model?.contextWindow
+    ?? info?.contextWindow
+    ?? tokens.contextWindow
+    ?? tokens.context_window
+  const contextTokens = tokens.contextTokens
+    ?? tokens.context_tokens
+    ?? (typeof input === 'number'
+      ? input + (typeof cacheRead === 'number' ? cacheRead : 0) + (typeof cacheWrite === 'number' ? cacheWrite : 0)
+      : undefined)
   return {
-    input_tokens: tokens.input ?? tokens.input_tokens,
+    input_tokens: input,
     output_tokens: tokens.output ?? tokens.output_tokens,
-    cache_read_tokens: cache?.read ?? tokens.cache_read_tokens ?? tokens.cacheReadTokens,
-    cache_creation_tokens: cache?.write ?? tokens.cache_write_tokens ?? tokens.cacheWriteTokens,
+    cache_read_tokens: cacheRead,
+    cache_creation_tokens: cacheWrite,
     total_tokens: tokens.total ?? tokens.total_tokens ?? tokens.totalTokens,
+    ...(embeddedContextWindow === undefined && contextWindow === undefined ? {} : { context_window: embeddedContextWindow ?? contextWindow }),
+    ...(contextTokens === undefined ? {} : { context_tokens: contextTokens }),
+    ...(typeof tokens.contextUsageRatio === 'number' ? { context_usage_ratio: tokens.contextUsageRatio } : {}),
   }
 }
 
@@ -533,10 +609,10 @@ function isFinishedEvent(event: Record<string, unknown>, emitted: boolean): bool
   return status === 'idle' || status === 'completed' || status === 'success'
 }
 
-function responseChunks(value: unknown, cumulative: Map<string, number>, partTypes?: Map<string, string>): CodingNsAgentEvent[] {
+function responseChunks(value: unknown, cumulative: Map<string, number>, partTypes?: Map<string, string>, contextWindow?: number): CodingNsAgentEvent[] {
   const record = asRecord(value)
   if (record === null) return []
-  const chunk = eventToChunk(record, cumulative, undefined, partTypes)
+  const chunk = eventToChunk(record, cumulative, undefined, partTypes, contextWindow)
   return chunk === null ? [] : [chunk]
 }
 

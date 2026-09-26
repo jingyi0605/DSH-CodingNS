@@ -37,6 +37,7 @@ test('OpenCode SSE 事件转换为标准文本流并绑定远端会话', async (
   const requests: unknown[] = []
   const fetch = async (url: string, init: RequestInit = {}): Promise<Response> => {
     if (url.endsWith('/global/health')) return new Response('{}', { status: 200 })
+    if (url.endsWith('/config/providers')) return new Response(JSON.stringify({ providers: { openai: { models: { 'gpt-5.5': { limit: { context: 200 } } } } } }), { status: 200 })
     if (url.endsWith('/session') && init.method === 'POST') return new Response(JSON.stringify({ id: 'remote-1' }), { status: 200 })
     if (url.endsWith('/message')) {
       requests.push(JSON.parse(String(init.body)))
@@ -63,7 +64,7 @@ test('OpenCode SSE 事件转换为标准文本流并绑定远端会话', async (
     { type: 'text-delta', text: '结果' },
     { type: 'tool-event', toolName: 'shell', callId: 'open-call-1', input: '{"command":"pwd"}', status: 'running' },
     { type: 'tool-event', toolName: 'shell', callId: 'open-call-1', output: '/workspace', outputMode: 'snapshot', status: 'completed' },
-    { type: 'usage', inputTokens: 100, outputTokens: 3, cacheReadTokens: 40, cacheWriteTokens: 5, uncachedInputTokens: 55, totalTokens: 108, cacheHitRate: 40 },
+    { type: 'usage', inputTokens: 100, outputTokens: 3, cacheReadTokens: 40, cacheWriteTokens: 5, uncachedInputTokens: 55, totalTokens: 108, cacheHitRate: 40, contextWindow: 200, contextTokens: 145, contextUsageRatio: 0.725 },
     { type: 'finish', reason: 'stop' },
   ])
   assert.deepEqual(requests, [{ parts: [{ type: 'text', text: '你好' }], model: { providerID: 'openai', modelID: 'gpt-5.5' }, variant: 'high' }])
