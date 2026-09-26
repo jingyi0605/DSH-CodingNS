@@ -1,4 +1,4 @@
-import { createElement, useEffect, useState, useSyncExternalStore } from 'react'
+import { createElement, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { CSSProperties, ReactElement } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -6,10 +6,13 @@ import type { GitBranchSnapshot, GitChangeItem, GitCommitChangedFile, GitCommitD
 import type { CodingNsClientFeatureModule, CodingNsRpcClient, CodingNsRpcResult } from './features/types.js'
 import { CODINGNS_RPC_CHANNEL } from '../shared/contracts/transport.js'
 import { debugWarn } from '../shared/debug.js'
-import { dshThemeColor } from './theme.js'
+import { dshSettingsToastStyle, dshThemeColor } from './theme.js'
+import type { SettingsNotice } from './features/types.js'
 
 export const GIT_PROVIDER_ID = 'codingns4dsh/git'
 export const GIT_KIND = 'git'
+const INITIAL_HISTORY_LIMIT = 50
+const HISTORY_PAGE_SIZE = 100
 /** 兼容早期调用方使用的面板标识；实际注册已迁移到右侧 Sidebar。 */
 export const GIT_PANEL_ID = GIT_PROVIDER_ID
 
@@ -130,53 +133,66 @@ function GitPanel(props: GitTabProps): ReactElement {
   const [branches, setBranches] = useState<GitBranchSnapshot | null>(null)
   const [subject, setSubject] = useState('')
   const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState('')
+  const [toast, setToast] = useState<SettingsNotice | null>(null)
   const [diffView, setDiffView] = useState<GitCommitDiff | null>(null)
-  const [historyLimit, setHistoryLimit] = useState(20)
+  const [historyTotalCount, setHistoryTotalCount] = useState(0)
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false)
+  const historyExpanded = useRef(false)
+
+  useEffect(() => {
+    if (toast === null) return
+    const timer = globalThis.setTimeout(() => setToast(null), 3200)
+    return () => globalThis.clearTimeout(timer)
+  }, [toast])
+
+  const notify = (kind: SettingsNotice['kind'], message: string): void => setToast({ kind, message })
 
   useEffect(() => {
     let disposed = false
     let cleanupTimer: (() => void) | undefined
-    setMessage('')
+    setToast(null)
     setWorkspaceId(undefined)
     setStatus(null)
     setHistory([])
+    historyExpanded.current = false
     setBranches(null)
     setDiffView(null)
     const load = async (resolvedWorkspaceId: string): Promise<void> => {
       const cached = readCache(resolvedWorkspaceId)
-      if (cached !== null) { setStatus(cached.status); setHistory(cached.history); setBranches(cached.branches) }
+      // 已经手动展开历史后，定时刷新只能更新状态和分支，不能用首屏缓存覆盖已加载的分页。
+      if (cached !== null && !historyExpanded.current) { setStatus(cached.status); setHistory(cached.history); setHistoryTotalCount(cached.history.length); setBranches(cached.branches) }
       try {
         const nextStatus = await call<GitStatus>(props.rpc, 'git/status', { workspaceId: resolvedWorkspaceId })
         if (disposed) return
         if (nextStatus.snapshot.enabled === false) {
-          setStatus(nextStatus); setHistory([]); setBranches(null); writeCache(resolvedWorkspaceId, { status: nextStatus, history: [], branches: null }); setMessage('')
+          setStatus(nextStatus); setHistory([]); setHistoryTotalCount(0); setBranches(null); writeCache(resolvedWorkspaceId, { status: nextStatus, history: [], branches: null }); setToast(null)
           return
         }
         const [nextHistory, nextBranches] = await Promise.all([
-          call<{ items: readonly GitHistoryItem[] }>(props.rpc, 'git/history', { workspaceId: resolvedWorkspaceId, limit: historyLimit }),
+          historyExpanded.current ? Promise.resolve(null) : call<{ items: readonly GitHistoryItem[]; totalCount: number }>(props.rpc, 'git/history', { workspaceId: resolvedWorkspaceId, limit: INITIAL_HISTORY_LIMIT, offset: 0 }),
           call<GitBranchSnapshot>(props.rpc, 'git/branches', { workspaceId: resolvedWorkspaceId }),
         ])
         if (disposed) return
         const normalizedBranches = normalizeBranchSnapshot(nextBranches)
-        setStatus(nextStatus); setHistory(nextHistory.items); setBranches(normalizedBranches); writeCache(resolvedWorkspaceId, { status: nextStatus, history: nextHistory.items, branches: normalizedBranches })
-        setMessage('')
+        if (nextHistory !== null) { setHistory(nextHistory.items); setHistoryTotalCount(nextHistory.totalCount); writeCache(resolvedWorkspaceId, { status: nextStatus, history: nextHistory.items, branches: normalizedBranches }) }
+        setStatus(nextStatus); setBranches(normalizedBranches)
+        setToast(null)
       } catch (error) {
-        if (!disposed) setMessage(error instanceof Error ? error.message : String(error))
+        if (!disposed) notify('error', error instanceof Error ? error.message : String(error))
       }
     }
     void resolveGitWorkspaceId(props.remote, sessionId).then((resolvedWorkspaceId) => {
       if (disposed) return
-      if (resolvedWorkspaceId === undefined) { setMessage('当前没有可用的工作区'); return }
+      if (resolvedWorkspaceId === undefined) { notify('error', '当前没有可用的工作区'); return }
       rememberGitWorkspaceSession(sessionId, resolvedWorkspaceId)
       writeGitWorkspaceOpen(resolvedWorkspaceId, true)
       setWorkspaceId(resolvedWorkspaceId)
       void load(resolvedWorkspaceId)
       const timer = globalThis.setInterval(() => { void load(resolvedWorkspaceId) }, 5_000)
       cleanupTimer = () => globalThis.clearInterval(timer)
-    }).catch((error: unknown) => { if (!disposed) setMessage(error instanceof Error ? error.message : String(error)) })
+    }).catch((error: unknown) => { if (!disposed) notify('error', error instanceof Error ? error.message : String(error)) })
     return () => { disposed = true; cleanupTimer?.() }
-  }, [historyLimit, props.remote, props.rpc, sessionId])
+  }, [props.remote, props.rpc, sessionId])
 
   useEffect(() => {
     const close = (): void => {
@@ -190,9 +206,11 @@ function GitPanel(props: GitTabProps): ReactElement {
   }, [sessionId, tabInfo.tab.signal])
 
   const run = async (action: string, payload: Record<string, unknown>, onSuccess?: (value: unknown) => void): Promise<void> => {
-    setBusy(true); setMessage('')
-    if (workspaceId === undefined) { setMessage('当前没有可用的工作区'); setBusy(false); return }
+    setBusy(true); setToast(null)
+    if (workspaceId === undefined) { notify('error', '当前没有可用的工作区'); setBusy(false); return }
     const targetWorkspaceId = workspaceId
+    const preserveExpandedHistory = action === 'git/status' && historyExpanded.current
+    if (!preserveExpandedHistory) historyExpanded.current = false
     try {
       const value = await call(props.rpc, action, { workspaceId: targetWorkspaceId, ...payload })
       onSuccess?.(value)
@@ -200,39 +218,49 @@ function GitPanel(props: GitTabProps): ReactElement {
       setStatus(nextStatus)
       if (nextStatus.snapshot.enabled !== false) {
         const [nextHistory, nextBranches] = await Promise.all([
-          call<{ items: readonly GitHistoryItem[] }>(props.rpc, 'git/history', { workspaceId: targetWorkspaceId, limit: historyLimit }),
+          preserveExpandedHistory ? Promise.resolve(null) : call<{ items: readonly GitHistoryItem[]; totalCount: number }>(props.rpc, 'git/history', { workspaceId: targetWorkspaceId, limit: INITIAL_HISTORY_LIMIT, offset: 0 }),
           call<GitBranchSnapshot>(props.rpc, 'git/branches', { workspaceId: targetWorkspaceId }),
         ])
         const normalizedBranches = normalizeBranchSnapshot(nextBranches)
-        setHistory(nextHistory.items); setBranches(normalizedBranches); writeCache(targetWorkspaceId, { status: nextStatus, history: nextHistory.items, branches: normalizedBranches })
+        if (nextHistory !== null) { setHistory(nextHistory.items); setHistoryTotalCount(nextHistory.totalCount); writeCache(targetWorkspaceId, { status: nextStatus, history: nextHistory.items, branches: normalizedBranches }) }
+        setBranches(normalizedBranches)
       } else {
-        setHistory([]); setBranches(null); writeCache(targetWorkspaceId, { status: nextStatus, history: [], branches: null })
+        setHistory([]); setHistoryTotalCount(0); setBranches(null); writeCache(targetWorkspaceId, { status: nextStatus, history: [], branches: null })
       }
-      setMessage('操作已完成')
+      notify('success', '操作已完成')
     }
-    catch (error) { setMessage(error instanceof Error ? error.message : String(error)) }
+    catch (error) { notify('error', error instanceof Error ? error.message : String(error)) }
     finally { setBusy(false) }
   }
 
   const commit = (): void => {
     const value = subject.trim()
-    if (!value) { setMessage('请输入提交说明'); return }
+    if (!value) { notify('error', '请输入提交说明'); return }
     void run('git/commit', { subject: value }, () => setSubject(''))
   }
   const copyCommitHash = (commitHash: string): void => {
-    void copyText(commitHash).then((copied) => setMessage(copied ? 'Git 版本号已复制' : '当前环境不支持复制'))
+    void copyText(commitHash).then((copied) => notify(copied ? 'success' : 'error', copied ? 'Git 版本号已复制' : '当前环境不支持复制'))
   }
   const copyCommitMessage = (value: string): void => {
-    void copyText(value).then((copied) => setMessage(copied ? '提交信息已复制' : '当前环境不支持复制'))
+    void copyText(value).then((copied) => notify(copied ? 'success' : 'error', copied ? '提交信息已复制' : '当前环境不支持复制'))
   }
   const openCommitDiff = (commitHash: string): void => {
     if (workspaceId === undefined) return
     setBusy(true)
-    setMessage('正在读取提交 Diff…')
+    notify('info', '正在读取提交 Diff…')
     void call<GitCommitDiff>(props.rpc, 'git/commit-diff', { workspaceId, commitHash }).then((value) => {
       setDiffView(value)
-      setMessage('')
-    }).catch((error: unknown) => setMessage(error instanceof Error ? error.message : String(error))).finally(() => setBusy(false))
+      setToast(null)
+    }).catch((error: unknown) => notify('error', error instanceof Error ? error.message : String(error))).finally(() => setBusy(false))
+  }
+  const loadMoreHistory = (): void => {
+    if (workspaceId === undefined || historyLoadingMore || history.length >= historyTotalCount) return
+    setHistoryLoadingMore(true)
+    historyExpanded.current = true
+    void call<{ items: readonly GitHistoryItem[]; totalCount: number }>(props.rpc, 'git/history', { workspaceId, limit: HISTORY_PAGE_SIZE, offset: history.length }).then((page) => {
+      setHistory((current) => [...current, ...page.items.filter((item) => !current.some((existing) => existing.commitHash === item.commitHash))])
+      setHistoryTotalCount(page.totalCount)
+    }).catch((error: unknown) => { historyExpanded.current = history.length > INITIAL_HISTORY_LIMIT; notify('error', error instanceof Error ? error.message : String(error)) }).finally(() => setHistoryLoadingMore(false))
   }
   const changes = status?.changes ?? []
   const staged = changes.filter((item) => hasStagedChanges(item))
@@ -247,24 +275,24 @@ function GitPanel(props: GitTabProps): ReactElement {
     createElement('header', { style: headerStyle },
       createElement('div', { style: { minWidth: 0 } }, createElement('h1', { style: titleStyle }, 'Git'), createElement('div', { style: branchStyle, title: status?.snapshot.repoRoot }, status?.snapshot.branch ?? '读取中')),
       createElement('div', { style: headerActionsStyle },
-        createElement(GitOperationsMenu, { busy, hasRemote: Boolean(status?.snapshot.hasRemote || branches?.remote.length), canUndo: history.length > 0, allVersions: historyLimit >= 100, stagedCount: staged.length, unstagedCount: unstaged.length, onStageAll: stageAll, onDiscardAll: discardAll, onShowAllVersions: () => setHistoryLimit(100), onOperation: runGitOperation }),
+        createElement(GitOperationsMenu, { busy, hasRemote: Boolean(status?.snapshot.hasRemote || branches?.remote.length), canUndo: history.length > 0, hasMoreVersions: history.length < historyTotalCount, stagedCount: staged.length, unstagedCount: unstaged.length, onStageAll: stageAll, onDiscardAll: discardAll, onLoadMore: loadMoreHistory, onOperation: runGitOperation }),
       ),
     ),
-    message ? createElement('div', { role: 'status', style: messageStyle }, message) : null,
-    status === null && !message ? createElement('div', { style: emptyStyle }, '正在读取 Git 状态…') : null,
+    toast === null ? null : createElement('div', { role: toast.kind === 'error' ? 'alert' : 'status', 'aria-live': 'polite', style: { ...dshSettingsToastStyle, position: 'absolute', top: 8, right: 'auto', left: '50%', transform: 'translateX(-50%)', width: 'min(300px, calc(100% - 24px))', pointerEvents: 'none', borderColor: toast.kind === 'error' ? dshThemeColor.error : toast.kind === 'success' ? dshThemeColor.success : dshThemeColor.border } }, toast.message),
+    status === null ? createElement('div', { style: emptyStyle }, '正在读取 Git 状态…') : null,
     status !== null && status.snapshot.enabled === false ? createElement('section', { style: sectionStyle },
       createElement('strong', undefined, '当前目录还没有 Git 仓库'),
       createElement('div', { style: mutedStyle }, '初始化后即可查看改动、提交和版本历史。'),
       createElement('button', { type: 'button', disabled: busy, onClick: () => void run('git/init', {}), style: primaryButtonStyle }, '初始化 Git'),
     ) : null,
-    status !== null ? createElement('div', { style: summaryStyle }, `${staged.length} 个已暂存 · ${unstaged.length} 个未暂存 · ${history.length} 条提交`) : null,
+    status !== null ? createElement('div', { style: summaryStyle }, `${staged.length} 个已暂存 · ${unstaged.length} 个未暂存 · ${history.length}${history.length < historyTotalCount ? `/${historyTotalCount}` : ''} 条提交`) : null,
     diffView !== null ? createElement(DiffViewer, { diff: diffView, onClose: () => setDiffView(null) }) : null,
     status !== null && status.snapshot.enabled !== false ? createElement('div', { style: contentGridStyle },
       createElement('div', { style: columnStyle },
         createElement('section', { style: commitSectionStyle },
           createElement('div', { style: commitEditorRowStyle },
             createElement('textarea', { value: subject, disabled: busy || workspaceId === undefined, onChange: (event: { currentTarget: { value: string } }) => setSubject(event.currentTarget.value), onKeyDown: (event: { key: string; preventDefault: () => void }) => { if (event.key === 'Enter') event.preventDefault() }, placeholder: '在这里输入提交信息', rows: 1, style: commitSubjectStyle }),
-            createElement('button', { type: 'button', disabled: busy || workspaceId === undefined, onClick: () => setMessage('生成提交信息功能暂未开放'), style: draftButtonStyle, title: '生成提交信息', 'aria-label': '生成提交信息' }, '✦'),
+            createElement('button', { type: 'button', disabled: busy || workspaceId === undefined, onClick: () => notify('info', '生成提交信息功能暂未开放'), style: draftButtonStyle, title: '生成提交信息', 'aria-label': '生成提交信息' }, '✦'),
           ),
           createElement('div', { style: commitActionsStyle },
             createElement('button', { type: 'button', disabled: busy || workspaceId === undefined, onClick: () => void run('git/status', {}, (value) => setStatus(value as GitStatus)), style: refreshActionStyle }, '刷新'),
@@ -275,7 +303,7 @@ function GitPanel(props: GitTabProps): ReactElement {
         unstaged.length > 0 ? createElement(ChangeSection, { title: '未提交文件', items: unstaged, busy, onAction: (action, path) => void run(`git/${action}`, { targets: [path] }), onBatchAction: (action, paths) => void run(`git/${action}`, { targets: paths }), onBulkAction: () => void run('git/stage', { targets: unstaged.map((item) => item.path) }) }) : null,
       ),
       createElement('div', { style: columnStyle },
-        createElement(HistorySection, { history, branches, busy, onSwitch: (branchName) => void run('git/switch', { branchName, create: false }, (value) => setBranches(normalizeBranchSnapshot(value as GitBranchSnapshot))), onCopy: copyCommitHash, onCopyMessage: copyCommitMessage, onViewDiff: openCommitDiff, onUndo: () => runGitOperation('undo') }),
+        createElement(HistorySection, { history, totalCount: historyTotalCount, hasMore: history.length < historyTotalCount, loadingMore: historyLoadingMore, onLoadMore: loadMoreHistory, branches, busy, onSwitch: (branchName) => void run('git/switch', { branchName, create: false }, (value) => setBranches(normalizeBranchSnapshot(value as GitBranchSnapshot))), onCopy: copyCommitHash, onCopyMessage: copyCommitMessage, onViewDiff: openCommitDiff, onUndo: () => runGitOperation('undo') }),
       ),
     ) : null,
   )
@@ -318,7 +346,7 @@ function ChangeSection({ title, items, busy, onAction, onBatchAction, onBulkActi
   )
 }
 
-function GitOperationsMenu({ busy, hasRemote, canUndo, allVersions, stagedCount, unstagedCount, onStageAll, onDiscardAll, onShowAllVersions, onOperation }: { readonly busy: boolean; readonly hasRemote: boolean; readonly canUndo: boolean; readonly allVersions: boolean; readonly stagedCount: number; readonly unstagedCount: number; readonly onStageAll: () => void; readonly onDiscardAll: () => void; readonly onShowAllVersions: () => void; readonly onOperation: (action: GitOperation) => void }): ReactElement {
+function GitOperationsMenu({ busy, hasRemote, canUndo, hasMoreVersions, stagedCount, unstagedCount, onStageAll, onDiscardAll, onLoadMore, onOperation }: { readonly busy: boolean; readonly hasRemote: boolean; readonly canUndo: boolean; readonly hasMoreVersions: boolean; readonly stagedCount: number; readonly unstagedCount: number; readonly onStageAll: () => void; readonly onDiscardAll: () => void; readonly onLoadMore: () => void; readonly onOperation: (action: GitOperation) => void }): ReactElement {
   return createElement('details', { style: menuStyle },
     createElement('summary', { style: menuSummaryStyle, title: 'Git 操作菜单', 'aria-label': 'Git 操作菜单' }, '⋯'),
     createElement('div', { style: menuPopupStyle },
@@ -327,7 +355,7 @@ function GitOperationsMenu({ busy, hasRemote, canUndo, allVersions, stagedCount,
       createElement('button', { type: 'button', disabled: busy || !hasRemote, onClick: () => onOperation('fetch'), style: menuButtonStyle }, 'Fetch'),
       createElement('button', { type: 'button', disabled: busy || !hasRemote, onClick: () => onOperation('pull'), style: menuButtonStyle }, 'Pull'),
       createElement('button', { type: 'button', disabled: busy || !hasRemote || stagedCount > 0 || unstagedCount > 0, onClick: () => onOperation('push'), style: menuButtonStyle }, 'Push'),
-      createElement('button', { type: 'button', disabled: busy || allVersions, onClick: onShowAllVersions, style: menuButtonStyle }, '查看所有版本'),
+      createElement('button', { type: 'button', disabled: busy || !hasMoreVersions, onClick: onLoadMore, style: menuButtonStyle, title: '查看所有版本' }, '查看更多版本（每次 100 条）'),
       createElement('button', { type: 'button', disabled: busy || !canUndo, onClick: () => onOperation('undo'), style: menuButtonStyle }, '撤销上次提交'),
       createElement('button', { type: 'button', disabled: busy, onClick: () => onOperation('refresh'), style: menuButtonStyle }, '刷新'),
     ),
@@ -413,7 +441,7 @@ function diffLineStyle(kind: ParsedDiffLine['kind']): CSSProperties {
   return diffLineBaseStyle
 }
 
-function HistorySection({ history, branches, busy, onSwitch, onCopy, onCopyMessage, onViewDiff, onUndo }: { readonly history: readonly GitHistoryItem[]; readonly branches: GitBranchSnapshot | null; readonly busy: boolean; readonly onSwitch: (branchName: string) => void; readonly onCopy: (commitHash: string) => void; readonly onCopyMessage: (message: string) => void; readonly onViewDiff: (commitHash: string) => void; readonly onUndo: () => void }): ReactElement {
+function HistorySection({ history, totalCount, hasMore, loadingMore, onLoadMore, branches, busy, onSwitch, onCopy, onCopyMessage, onViewDiff, onUndo }: { readonly history: readonly GitHistoryItem[]; readonly totalCount: number; readonly hasMore: boolean; readonly loadingMore: boolean; readonly onLoadMore: () => void; readonly branches: GitBranchSnapshot | null; readonly busy: boolean; readonly onSwitch: (branchName: string) => void; readonly onCopy: (commitHash: string) => void; readonly onCopyMessage: (message: string) => void; readonly onViewDiff: (commitHash: string) => void; readonly onUndo: () => void }): ReactElement {
   const rows = history.map((item, index) => createElement('div', { key: item.commitHash, style: historyRowStyle },
     createElement('code', { style: hashStyle }, item.commitHash.slice(0, 8)),
     createElement('span', { style: fileNameStyle, title: item.subject }, item.subject),
@@ -430,8 +458,9 @@ function HistorySection({ history, branches, busy, onSwitch, onCopy, onCopyMessa
     ),
   ))
   return createElement('section', { style: sectionStyle },
-    createElement('div', { style: sectionHeaderStyle }, createElement('strong', undefined, `Git 版本 (${history.length})`), branches === null ? null : createElement('select', { value: branches.currentBranch, disabled: busy, onChange: (event: { currentTarget: { value: string } }) => onSwitch(event.currentTarget.value), style: branchSelectStyle }, ...branches.local.map((branch) => createElement('option', { key: branch.name, value: branch.name }, branch.name)))),
+    createElement('div', { style: sectionHeaderStyle }, createElement('strong', undefined, `Git 版本 (${history.length}${hasMore ? `/${totalCount}` : ''})`), branches === null ? null : createElement('select', { value: branches.currentBranch, disabled: busy, onChange: (event: { currentTarget: { value: string } }) => onSwitch(event.currentTarget.value), style: branchSelectStyle }, ...branches.local.map((branch) => createElement('option', { key: branch.name, value: branch.name }, branch.name)))),
     history.length === 0 ? createElement('div', { style: mutedStyle }, '暂无提交') : rows,
+    hasMore ? createElement('button', { type: 'button', disabled: busy || loadingMore, onClick: onLoadMore, style: loadMoreButtonStyle }, loadingMore ? '正在加载…' : '查看更多版本（每次 100 条）') : null,
   )
 }
 
@@ -497,13 +526,16 @@ function GitWorkspaceRecovery({ useSessions, remote, sidebarRight }: GitWorkspac
     if (typeof window === 'undefined') return
     const refresh = (): void => setWorkspaceRevision((value) => value + 1)
     window.addEventListener(GIT_WORKSPACE_STATE_EVENT, refresh)
-    return () => window.removeEventListener(GIT_WORKSPACE_STATE_EVENT, refresh)
+    window.addEventListener('storage', refresh)
+    return () => { window.removeEventListener(GIT_WORKSPACE_STATE_EVENT, refresh); window.removeEventListener('storage', refresh) }
   }, [])
   useEffect(() => {
     if (typeof sidebarRight.openTabIn !== 'function') return
     let disposed = false
     const recover = async (): Promise<void> => {
-      for (const sessionId of sessionIds) {
+      const workspaceItems = await readWorkspaceItems((remote as GitRemote | undefined)?.workspace)
+      const allSessionIds = [...new Set([...sessionIds, ...workspaceItems.flatMap((item) => item.sessionIds)])]
+      for (const sessionId of allSessionIds) {
         const workspaceId = await resolveGitWorkspaceId(remote, sessionId).catch(() => undefined)
         if (disposed || workspaceId === undefined) continue
         rememberGitWorkspaceSession(sessionId, workspaceId)
@@ -704,10 +736,16 @@ function normalizeBranchSnapshot(value: GitBranchSnapshot | null): GitBranchSnap
 }
 async function call<T = unknown>(rpc: CodingNsRpcClient, endpoint: string, payload: unknown): Promise<T> { let result: CodingNsRpcResult; try { result = await rpc.call(CODINGNS_RPC_CHANNEL, endpoint, payload) } catch (error) { if (!/HTTP (?:404|405)\b/u.test(error instanceof Error ? error.message : String(error))) throw error; result = await rpc.call('/api', `codingns/${endpoint}`, payload) } if (!result.ok) throw new Error(result.error.message); return result.value as T }
 async function copyText(value: string): Promise<boolean> { try { if (typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') return false; await navigator.clipboard.writeText(value); return true } catch { return false } }
-function formatDate(value: string): string { const timestamp = Date.parse(value); return Number.isNaN(timestamp) ? value : new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(timestamp) }
+function formatDate(value: string): string {
+  const timestamp = Date.parse(value)
+  if (Number.isNaN(timestamp)) return value
+  const parts = new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(timestamp)
+  const get = (type: string): string => parts.find((part) => part.type === type)?.value ?? ''
+  return `${get('month')}月${get('day')}日 ${get('hour')}:${get('minute')}`
+}
 function buildCommitMessageText(subject: string, body: string): string { const normalizedSubject = subject.trim(); const normalizedBody = body.trim(); return normalizedBody ? `${normalizedSubject}\n\n${normalizedBody}` : normalizedSubject }
 
-const panelStyle: CSSProperties = { boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 12, minHeight: '100%', padding: '16px 18px 24px', overflow: 'auto', background: dshThemeColor.pageBackground, color: dshThemeColor.labelPrimary }
+const panelStyle: CSSProperties = { position: 'relative', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: 12, minHeight: '100%', padding: '16px 18px 24px', overflow: 'auto', background: dshThemeColor.pageBackground, color: dshThemeColor.labelPrimary }
 const headerStyle: CSSProperties = { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, paddingBottom: 10, borderBottom: `1px solid ${dshThemeColor.border}` }
 const titleStyle: CSSProperties = { margin: 0, fontSize: 20, lineHeight: 1.2 }
 const tabTitleStyle: CSSProperties = { display: 'inline-flex', alignItems: 'center', minWidth: 0, color: dshThemeColor.labelPrimary, fontSize: 12 }
@@ -732,7 +770,6 @@ const rowActionsStyle: CSSProperties = { display: 'inline-flex', alignItems: 'ce
 const iconButtonStyle: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, border: 0, borderRadius: 4, padding: 0, color: dshThemeColor.labelSecondary, background: 'transparent', cursor: 'pointer', fontSize: 16 }
 const dangerIconButtonStyle: CSSProperties = { ...iconButtonStyle, color: dshThemeColor.error }
 const mutedStyle: CSSProperties = { color: dshThemeColor.labelTertiary, fontSize: 11 }
-const messageStyle: CSSProperties = { padding: '7px 9px', borderRadius: 5, color: dshThemeColor.error, background: 'color-mix(in srgb, currentColor 10%, transparent)', fontSize: 12 }
 const emptyStyle: CSSProperties = { padding: 16, color: dshThemeColor.labelSecondary, fontSize: 12 }
 const diffOverlayStyle: CSSProperties = { position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, boxSizing: 'border-box', background: 'color-mix(in srgb, #000 28%, transparent)' }
 const diffStyle: CSSProperties = { ...sectionStyle, width: 'min(1000px, 100%)', maxHeight: 'min(88vh, 760px)', overflow: 'hidden', boxShadow: dshThemeColor.subtleShadow }
@@ -762,6 +799,7 @@ const refreshActionStyle: CSSProperties = { minHeight: 30, border: 0, borderRadi
 const submitActionStyle: CSSProperties = { ...refreshActionStyle, color: dshThemeColor.accent, fontWeight: 600 }
 const primaryButtonStyle: CSSProperties = { minHeight: 28, border: 0, borderRadius: 5, padding: '4px 9px', color: '#fff', background: dshThemeColor.accent, cursor: 'pointer', fontSize: 12 }
 const branchSelectStyle: CSSProperties = { maxWidth: 150, border: `1px solid ${dshThemeColor.border}`, borderRadius: 4, padding: '3px 5px', color: dshThemeColor.labelSecondary, background: dshThemeColor.pageBackground, fontSize: 11 }
+const loadMoreButtonStyle: CSSProperties = { minHeight: 30, border: `1px solid ${dshThemeColor.border}`, borderRadius: 5, padding: '4px 9px', color: dshThemeColor.labelSecondary, background: 'transparent', cursor: 'pointer', fontSize: 12 }
 const menuStyle: CSSProperties = { position: 'relative', flex: '0 0 auto' }
 const menuSummaryStyle: CSSProperties = { listStyle: 'none', cursor: 'pointer', padding: '0 4px', color: dshThemeColor.labelSecondary, fontSize: 16 }
 const menuPopupStyle: CSSProperties = { position: 'absolute', right: 0, zIndex: 2, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 100, padding: 4, border: `1px solid ${dshThemeColor.border}`, borderRadius: 5, background: dshThemeColor.menuBackground, boxShadow: dshThemeColor.subtleShadow }
