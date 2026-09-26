@@ -325,6 +325,8 @@ export class CodingNsWebTerminals extends Service {
   private readonly recoveries = new Map<string, Promise<readonly WebTerminalInfo[]>>()
   private readonly closeFailureStore = new ObservableValue<readonly TerminalCloseFailure[]>([])
   readonly closeFailures: TerminalObservable<readonly TerminalCloseFailure[]> = this.closeFailureStore
+  private readonly remoteReadyStore = new ObservableValue(false)
+  readonly remoteReadyState: TerminalObservable<boolean> = this.remoteReadyStore
   private readonly closeRequests = new Map<string, CloseRequest>()
   /** Remote 注入前不能执行关闭请求；就绪后统一冲刷，避免把启动竞态显示成永久错误。 */
   private cleanupQueued = false
@@ -418,6 +420,7 @@ export class CodingNsWebTerminals extends Service {
   /** 由 Client 的 Remote 注入回调调用，完成启动阶段延迟的关闭请求。 */
   remoteReady(): void {
     debugInfo('codingns4dsh: client terminal remote ready notification')
+    this.remoteReadyStore.set(true)
     void this.flushCleanup()
   }
 

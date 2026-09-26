@@ -1,4 +1,4 @@
-import { createElement, useState } from 'react'
+import { createElement } from 'react'
 import type { ReactElement } from 'react'
 import {
   CODINGNS_WORKSPACE_SESSION_ENHANCEMENT_FIELD,
@@ -14,21 +14,18 @@ import {
 import { useCodingNsTranslator } from '../locale.js'
 
 /** 工作区会话增强的单列设置面板。 */
-export function WorkspaceSessionEnhancementPanel({ services, enabled, snapshot }: FeaturePanelProps): ReactElement {
+export function WorkspaceSessionEnhancementPanel({ services, enabled, snapshot, notify }: FeaturePanelProps): ReactElement {
   const t = useCodingNsTranslator(services.locale)
-  const [writeError, setWriteError] = useState<string | null>(null)
   const value = snapshot.value?.workspaceSessionEnhancement
     ?? DEFAULT_WORKSPACE_SESSION_ENHANCEMENT_SETTINGS
   const disabled = !enabled || snapshot.status === 'loading' || !snapshot.writable
-
-  const updateSetting = (field: 'showAdapterLogo' | 'showArchivedSessions' | 'showSubscriptionUsage', nextValue: boolean): void => {
-    setWriteError(null)
+  const updateSetting = (field: 'showAdapterLogo' | 'showArchivedSessions' | 'showSubscriptionUsage' | 'showQuickPhrases', nextValue: boolean): void => {
     void services.settings.mutate([{
       op: 'set',
       path: [CODINGNS_WORKSPACE_SESSION_ENHANCEMENT_FIELD, field],
       value: nextValue,
-    }]).catch((cause: unknown) => {
-      setWriteError(cause instanceof Error ? cause.message : String(cause))
+    }]).then(() => notify({ kind: 'success', message: '工作区会话设置已保存' })).catch((cause: unknown) => {
+      notify({ kind: 'error', message: cause instanceof Error ? cause.message : String(cause) })
     })
   }
 
@@ -94,8 +91,22 @@ export function WorkspaceSessionEnhancementPanel({ services, enabled, snapshot }
         style: { flex: '0 0 auto', accentColor: dshThemeColor.accent },
       }),
     ),
-    writeError === null
-      ? null
-      : createElement('div', { role: 'alert', style: { color: dshThemeColor.error, fontSize: 12 } }, writeError),
+    createElement('label', {
+      style: dshSettingsListRowStyle,
+    },
+      createElement('span', { style: { minWidth: 0 } },
+        createElement('strong', { style: { display: 'block', fontSize: 13, lineHeight: 1.4 } }, t('workspace.showQuickPhrases')),
+        createElement('span', { style: { display: 'block', marginTop: 3, ...dshSettingsHelpStyle } }, t('workspace.quickPhrasesDescription')),
+      ),
+      createElement('input', {
+        type: 'checkbox',
+        role: 'switch',
+        'aria-label': t('workspace.showQuickPhrases'),
+        checked: value.showQuickPhrases,
+        disabled,
+        onChange: (event: { currentTarget: { checked: boolean } }) => updateSetting('showQuickPhrases', event.currentTarget.checked),
+        style: { flex: '0 0 auto', accentColor: dshThemeColor.accent },
+      }),
+    ),
   )
 }

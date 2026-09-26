@@ -29,7 +29,7 @@ import { useCodingNsTranslator } from '../locale.js'
  *
  * 密码只在单次 RPC 中经过 Host，表单不保存它；refresh token 只存在于 Host。
  */
-export function ReverseProxyPanel({ services, enabled, snapshot }: FeaturePanelProps): ReactElement {
+export function ReverseProxyPanel({ services, enabled, snapshot, notify }: FeaturePanelProps): ReactElement {
   const { settings, rpc } = services
   const t = useCodingNsTranslator(services.locale)
   const disabled = !enabled
@@ -46,7 +46,6 @@ export function ReverseProxyPanel({ services, enabled, snapshot }: FeaturePanelP
   const [devices, setDevices] = useState<DshDeviceListResponse | null>(null)
   const [selectedDeviceId, setSelectedDeviceId] = useState('')
   const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState('')
   const [h5UrlCopied, setH5UrlCopied] = useState(false)
 
   useEffect(() => {
@@ -70,17 +69,16 @@ export function ReverseProxyPanel({ services, enabled, snapshot }: FeaturePanelP
   useEffect(() => {
     if (!enabled || auth.status !== 'authenticated') return
     void loadDevicesInternal().catch((error: unknown) => {
-      setMessage(error instanceof Error ? error.message : String(error))
+      notify({ kind: 'error', message: error instanceof Error ? error.message : String(error) })
     })
   }, [auth.status, enabled, rpc])
 
   const run = async (operation: () => Promise<void>): Promise<void> => {
     setBusy(true)
-    setMessage('')
     try {
       await operation()
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      notify({ kind: 'error', message: error instanceof Error ? error.message : String(error) })
     } finally {
       setBusy(false)
     }
@@ -99,7 +97,7 @@ export function ReverseProxyPanel({ services, enabled, snapshot }: FeaturePanelP
     setPassword('')
     setAuth(next)
     setH5UrlCopied(false)
-    setMessage(t('relay.loginSuccess'))
+    notify({ kind: 'success', message: t('relay.loginSuccess') })
   })
 
   const logout = (): Promise<void> => run(async () => {
@@ -108,17 +106,17 @@ export function ReverseProxyPanel({ services, enabled, snapshot }: FeaturePanelP
     setDevices(null)
     setSelectedDeviceId('')
     setH5UrlCopied(false)
-    setMessage(t('relay.loggedOut'))
+    notify({ kind: 'success', message: t('relay.loggedOut') })
   })
 
   const copyH5LoginUrl = async (): Promise<void> => {
     try {
       await copyText(CODINGNS_H5_LOGIN_URL)
       setH5UrlCopied(true)
-      setMessage(t('relay.copySuccess'))
+      notify({ kind: 'success', message: t('relay.copySuccess') })
     } catch (error) {
       setH5UrlCopied(false)
-      setMessage(error instanceof Error ? error.message : t('relay.copyFailed'))
+      notify({ kind: 'error', message: error instanceof Error ? error.message : t('relay.copyFailed') })
     }
   }
 
@@ -151,7 +149,7 @@ export function ReverseProxyPanel({ services, enabled, snapshot }: FeaturePanelP
       setControlBaseUrl(addedUrl)
       setNewControlBaseUrl('')
       setAddAddressOpen(false)
-      setMessage(t('relay.add'))
+      notify({ kind: 'success', message: t('relay.add') })
     } catch (error) {
       setAddressError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -162,7 +160,7 @@ export function ReverseProxyPanel({ services, enabled, snapshot }: FeaturePanelP
   const chooseControlBaseUrl = (value: string): void => {
     setControlBaseUrl(value)
     void settings.set(CODINGNS_CONTROL_BASE_URL_FIELD, value).catch((error: unknown) => {
-      setMessage(error instanceof Error ? error.message : String(error))
+      notify({ kind: 'error', message: error instanceof Error ? error.message : String(error) })
     })
   }
 
@@ -288,7 +286,6 @@ export function ReverseProxyPanel({ services, enabled, snapshot }: FeaturePanelP
         createElement('div', { style: { fontSize: 13, opacity: 0.75 } }, t('relay.devicesSummary', { current: selectedDeviceId || t('relay.unknown'), count: devices.devices.length })),
       ),
     ),
-    message && createElement('div', { role: 'status', style: { color: message.includes('成功') ? dshThemeColor.success : dshThemeColor.error } }, message),
   )
 }
 

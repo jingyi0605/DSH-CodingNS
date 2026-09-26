@@ -1,5 +1,6 @@
 import type { CodingNsSettings } from '../../shared/contracts/config.js'
 import { accepted, type CodingNsSettingsStore } from '../settings-store.js'
+import { debugInfo, debugWarn } from '../../shared/debug.js'
 
 /** 0.1.7 Client ConfigForm 的最小结构化边界。 */
 export interface DshConfigForm<T> {
@@ -42,17 +43,26 @@ export function createConfigFormSettingsStore(
     getSnapshot: () => snapshot,
     subscribe: (listener) => { listeners.add(listener); return () => listeners.delete(listener) },
     mutate: async (operations, revision) => {
-      const result = await accepted(form.mutate(operations, revision))
+      const result = await writeWithRetry(
+        () => form.mutate(operations, revision),
+        () => form.mutate(operations),
+      )
       refresh()
       return result
     },
     set: async (field, value) => {
-      const result = await accepted(form.set(field, value))
+      const result = await writeWithRetry(
+        () => form.set(field, value),
+        () => form.set(field, value),
+      )
       refresh()
       return result
     },
     unset: async (field) => {
-      const result = await accepted(form.unset(field))
+      const result = await writeWithRetry(
+        () => form.unset(field),
+        () => form.unset(field),
+      )
       refresh()
       return result
     },
@@ -61,6 +71,24 @@ export function createConfigFormSettingsStore(
       listeners.clear()
     },
   }
+}
+
+/**
+ * ConfigForm 在 revision 过期时会返回 false，并先异步恢复 Host 快照。
+ * 设置页的编辑器不会感知这次恢复，因此立刻重试一次最新 revision，避免
+ * 用户看到控件可以操作却始终回弹到旧值。只重试一次，真正的拒绝仍然返回
+ * false，调用方可以显示明确错误。
+ */
+async function writeWithRetry(
+  first: () => Promise<void | boolean>,
+  retry: () => Promise<void | boolean>,
+): Promise<boolean> {
+  const result = await accepted(first())
+  if (result) return true
+  debugWarn('codingns4dsh: client config form write rejected; retrying with latest revision')
+  const retried = await accepted(retry())
+  debugInfo('codingns4dsh: client config form write retry completed', { accepted: retried })
+  return retried
 }
 
 function toStoreSnapshot(snapshot: ReturnType<DshConfigForm<CodingNsSettings>['getSnapshot']>) {

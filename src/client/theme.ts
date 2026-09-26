@@ -202,6 +202,39 @@ export const dshSettingsNoteStyle: CSSProperties = {
   lineHeight: 1.5,
 }
 
+/** 终端外观设置的紧凑双列布局。 */
+export const dshSettingsGridStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+  gap: 12,
+}
+
+export const dshSettingsSectionHeaderStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 12,
+  paddingBottom: 2,
+}
+
+/** 设置写入结果的顶部浮动提示。 */
+export const dshSettingsToastStyle: CSSProperties = {
+  position: 'sticky',
+  top: 8,
+  zIndex: 20,
+  alignSelf: 'center',
+  width: 'min(300px, calc(100% - 24px))',
+  padding: '9px 14px',
+  border: `1px solid ${dshThemeColor.border}`,
+  borderRadius: 8,
+  background: dshThemeColor.menuBackground,
+  boxShadow: dshThemeColor.prominentShadow,
+  color: dshThemeColor.labelPrimary,
+  fontSize: 13,
+  lineHeight: 1.4,
+  textAlign: 'center',
+}
+
 /** 模态框和弹出菜单必须成对设置前景色与背景色。 */
 export const dshPopupSurfaceStyle: CSSProperties = {
   color: dshThemeColor.labelPrimary,

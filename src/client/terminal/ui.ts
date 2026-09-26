@@ -24,6 +24,7 @@ import type { SidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-rig
 import type { CodingNsSettings } from '../../shared/contracts/config.js'
 import { resolveChevronDownIcon } from '../../dsh-capabilities/client/primitives-adapter.js'
 import { CodingNsWebTerminals, type WebTerminalId } from './model.js'
+import { createTerminalSessionRecovery, type TerminalSidebarMountedSource, type TerminalSidebarRecoveryPort } from './recovery.js'
 import { installTerminalStyles, terminalClass } from './styles.js'
 import { CodingNsXtermView } from './xterm-view.js'
 import { codingNsTranslator, useCodingNsTranslator, type CodingNsLocale } from '../locale.js'
@@ -63,6 +64,7 @@ interface TerminalGuideProps extends TerminalGuideEntryOwnerProps {
   readonly sessionId: string
   readonly useTabInfo: () => SidebarRightTabInfo
   readonly webTerminals: CodingNsWebTerminals
+  readonly recoverSession: (sessionId: string) => Promise<readonly unknown[]>
   readonly locale: CodingNsLocale
 }
 
@@ -87,7 +89,9 @@ export function registerCodingNsTerminalUi(
   const registerCloseHandler = sidebarRight.registerCloseHandler
   // alpha2 提供多 Tab 元数据和关闭 API；rc3 没有这些字段，不能直接调用。
   const legacyCloseFallback = typeof registerCloseHandler !== 'function'
-  const supportsMultiple = typeof (ctx.sidebarRight as typeof ctx.sidebarRight & { readonly openTabs?: unknown }).openTabs !== 'undefined'
+  const recoverySidebar = sidebarRight as unknown as TerminalSidebarRecoveryPort
+  const supportsMultiple = readSidebarOpenTabs(recoverySidebar) !== undefined
+  const recovery = createTerminalSessionRecovery(webTerminals, recoverySidebar, TERMINAL_KIND)
   disposers.push(installTerminalStyles())
   const tabDefinition = {
     id: TERMINAL_PROVIDER_ID,
@@ -114,11 +118,11 @@ export function registerCodingNsTerminalUi(
   }, TerminalTitle)))
   disposers.push(ctx.slots.inject('sidebar.right.tab.guide.entry', () => ctx.slots.register({
     name: 'sidebar.right.tab.guide.entry', key: TERMINAL_PROVIDER_ID,
-    inject: () => ({ webTerminals, locale: ctx.locale }),
+    inject: () => ({ webTerminals, recoverSession: recovery.ensure, locale: ctx.locale }),
   }, TerminalGuide)))
   disposers.push(ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay', id: 'codingns4dsh-terminal-cleanup', order: 1000,
-    inject: () => ({ webTerminals, locale: ctx.locale }),
+    inject: () => ({ webTerminals, locale: ctx.locale, sidebarRight: recoverySidebar, recoverSession: recovery.ensure }),
   }, TerminalCleanup)))
   if (typeof registerCloseHandler === 'function') disposers.push(registerCloseHandler.call(ctx.sidebarRight, TERMINAL_KIND, (sessionId, tab) => {
     const params = navigationParams(tab)
@@ -202,12 +206,13 @@ function TerminalTitle({ sessionId, useTabInfo, webTerminals, locale }: Terminal
   )
 }
 
-function TerminalGuide({ sessionId, useTabInfo, webTerminals, title, description, locale }: TerminalGuideProps): ReactElement {
+function TerminalGuide({ sessionId, useTabInfo, webTerminals, recoverSession, title, description, locale }: TerminalGuideProps): ReactElement {
   const t = useCodingNsTranslator(locale)
   const info = useTabInfo()
   const [open, setOpen] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const [state, setState] = useState<ShellMenuState>({ phase: 'loading' })
+  useEffect(() => { void recoverSession(String(sessionId)).catch(() => undefined) }, [recoverSession, sessionId])
   useEffect(() => {
     if (!open) return
     const controller = new AbortController()
@@ -284,8 +289,39 @@ function shellMenuItems(state: ShellMenuState, t: ReturnType<typeof codingNsTran
   return state.shells.map((shell) => ({ id: shell.path, label: shell.name }))
 }
 
-function TerminalCleanup({ webTerminals, locale }: PropsRuntime<'shell.overlay'> & Pick<TerminalInjected, 'webTerminals' | 'locale'>): ReactElement | null {
+interface TerminalCleanupProps extends PropsRuntime<'shell.overlay'> {
+  readonly webTerminals: CodingNsWebTerminals
+  readonly locale: CodingNsLocale
+  readonly sidebarRight: TerminalSidebarRecoveryPort
+  readonly recoverSession: (sessionId: string) => Promise<readonly unknown[]>
+}
+
+function TerminalCleanup({ webTerminals, locale, sidebarRight, recoverSession }: TerminalCleanupProps): ReactElement | null {
   const t = useCodingNsTranslator(locale)
+  const openTabs = readSidebarOpenTabs(sidebarRight)
+  const openTabSnapshot = useSyncExternalStore(
+    openTabs?.subscribe ?? noSubscribe,
+    openTabs?.getSnapshot ?? noOpenTabs,
+    openTabs?.getSnapshot ?? noOpenTabs,
+  )
+  const remoteReady = useSyncExternalStore(
+    webTerminals.remoteReadyState.subscribe.bind(webTerminals.remoteReadyState),
+    webTerminals.remoteReadyState.getSnapshot.bind(webTerminals.remoteReadyState),
+    webTerminals.remoteReadyState.getSnapshot.bind(webTerminals.remoteReadyState),
+  )
+  const mounted = readSidebarMounted(sidebarRight)
+  const mountedSessionId = useSyncExternalStore(
+    mounted?.subscribe ?? noSubscribe,
+    mounted?.getSnapshot ?? noMountedSession,
+    mounted?.getSnapshot ?? noMountedSession,
+  )
+  useEffect(() => {
+    // 0.1.7 才提供 mounted 会话 observable；旧版本保留原有 Guide 挂载路径。
+    if (!remoteReady || mounted === undefined) return
+    const sessionIds = new Set(openTabSnapshot.map((tab) => String(tab.sessionId).trim()).filter(Boolean))
+    if (mountedSessionId !== undefined) sessionIds.add(String(mountedSessionId).trim())
+    for (const sessionId of sessionIds) void recoverSession(sessionId).catch(() => undefined)
+  }, [openTabSnapshot, recoverSession, remoteReady, mountedSessionId])
   const failures = useSyncExternalStore(webTerminals.closeFailures.subscribe.bind(webTerminals.closeFailures), webTerminals.closeFailures.getSnapshot.bind(webTerminals.closeFailures))
   if (failures.length === 0) return null
   return createElement('div', { className: terminalClass.cleanupStack },
@@ -299,6 +335,21 @@ function TerminalCleanup({ webTerminals, locale }: PropsRuntime<'shell.overlay'>
     )),
   )
 }
+
+function readSidebarOpenTabs(sidebarRight: TerminalSidebarRecoveryPort): TerminalSidebarRecoveryPort['openTabs'] | undefined {
+  try { return sidebarRight.openTabs }
+  catch { return undefined }
+}
+
+function readSidebarMounted(sidebarRight: TerminalSidebarRecoveryPort): TerminalSidebarMountedSource | undefined {
+  try { return sidebarRight.mounted }
+  catch { return undefined }
+}
+
+function noMountedSession(): undefined { return undefined }
+const EMPTY_OPEN_TABS: readonly { readonly sessionId: string; readonly tabId: string; readonly kind: string }[] = []
+function noOpenTabs(): readonly { readonly sessionId: string; readonly tabId: string; readonly kind: string }[] { return EMPTY_OPEN_TABS }
+function noSubscribe(): () => void { return () => undefined }
 
 function terminalParams(info: SidebarRightTabInfo): TerminalParams {
   const params = info.tab.navigation.params

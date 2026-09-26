@@ -8,7 +8,6 @@ import {
   dshSettingsButtonStyle,
   dshSettingsFieldLabelStyle,
   dshSettingsFieldStyle,
-  dshSettingsNoteStyle,
   dshSettingsPrimaryButtonStyle,
   dshThemeColor,
 } from '../theme.js'
@@ -17,7 +16,7 @@ import { writeLoginProtectionSession } from './login-protection-session.js'
 const DEFAULT_SCOPES: LoginProtectionScopes = { lan: true, relay: true }
 
 /** 独立的登录保护设置卡片，凭据实际由 Host 保存和校验。 */
-export function LoginProtectionPanel({ services, enabled, snapshot }: FeaturePanelProps): ReactElement {
+export function LoginProtectionPanel({ services, enabled, snapshot, notify }: FeaturePanelProps): ReactElement {
   const { rpc } = services
   const controlsDisabled = !enabled || snapshot.status === 'loading' || !snapshot.writable
   const [saved, setSaved] = useState<LanAccessDshLoginSettings>({ enabled: false, username: '', passwordConfigured: false, timeoutSeconds: 1800, scopes: DEFAULT_SCOPES })
@@ -27,7 +26,6 @@ export function LoginProtectionPanel({ services, enabled, snapshot }: FeaturePan
   const [timeoutSeconds, setTimeoutSeconds] = useState('1800')
   const [scopes, setScopes] = useState<LoginProtectionScopes>(DEFAULT_SCOPES)
   const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState('')
 
   useEffect(() => {
     if (!enabled) return
@@ -39,12 +37,11 @@ export function LoginProtectionPanel({ services, enabled, snapshot }: FeaturePan
         setTimeoutSeconds(String(value.timeoutSeconds))
         setScopes(value.scopes ?? DEFAULT_SCOPES)
       })
-      .catch((error: unknown) => setMessage(error instanceof Error ? error.message : String(error)))
+      .catch((error: unknown) => notify({ kind: 'error', message: error instanceof Error ? error.message : String(error) }))
   }, [enabled, rpc])
 
   const save = async (): Promise<void> => {
     setBusy(true)
-    setMessage('')
     try {
       const parsedTimeout = Number(timeoutSeconds)
       if (!Number.isInteger(parsedTimeout) || parsedTimeout < 60 || parsedTimeout > 604800) throw new Error('会话超时时间必须是 60 到 604800 秒')
@@ -64,9 +61,9 @@ export function LoginProtectionPanel({ services, enabled, snapshot }: FeaturePan
         writeLoginProtectionSession(undefined)
       }
       setPassword('')
-      setMessage(value.enabled && value.scopes.relay && password === '' ? '设置已保存；中继访问需要重新输入密码以建立当前标签页会话' : '登录保护设置已保存')
+      notify({ kind: 'success', message: value.enabled && value.scopes.relay && password === '' ? '设置已保存；中继访问需要重新输入密码以建立当前标签页会话' : '登录保护设置已保存' })
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      notify({ kind: 'error', message: error instanceof Error ? error.message : String(error) })
     } finally {
       setBusy(false)
     }
@@ -108,7 +105,6 @@ export function LoginProtectionPanel({ services, enabled, snapshot }: FeaturePan
       )),
     ),
     createElement('button', { type: 'button', disabled: controlsDisabled || busy, onClick: () => void save(), style: dshSettingsPrimaryButtonStyle }, busy ? '保存中…' : '保存登录保护'),
-    message && createElement('div', { role: 'status', style: message.includes('已') ? { color: dshThemeColor.success } : { ...dshSettingsNoteStyle, color: dshThemeColor.error } }, message),
   )
 }
 

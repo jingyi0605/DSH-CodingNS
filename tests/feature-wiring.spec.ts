@@ -318,11 +318,11 @@ test('外部 Agent 作为独立 Client 设置模块登记且默认启用', () =>
   assert.equal(cliAdaptersFeature.settingsPanel?.name, 'CliAdaptersPanel')
 })
 
-test('终端强化作为默认关闭且重启生效的独立设置模块登记', () => {
+test('终端增强作为默认关闭且重启生效的独立设置模块登记', () => {
   assert.equal(terminalEnhancementFeature.descriptor.name, 'terminalEnhancement')
   assert.equal(terminalEnhancementFeature.descriptor.enabledByDefault, false)
   assert.equal(terminalEnhancementFeature.descriptor.activation, 'restart')
-  assert.equal(terminalEnhancementFeature.descriptor.ui?.label, '终端强化')
+  assert.equal(terminalEnhancementFeature.descriptor.ui?.label, '终端增强')
   assert.equal(terminalEnhancementFeature.settingsPanel?.name, 'TerminalEnhancementPanel')
 })
 

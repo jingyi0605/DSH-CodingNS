@@ -41,6 +41,25 @@ test('0.1.7 Client ConfigForm 内容未变化时不重复通知', async () => {
   assert.deepEqual(store.getSnapshot().value, { controlBaseUrl: 'https://example.test', modules: {} })
 })
 
+test('0.1.7 Client ConfigForm revision 冲突后使用最新快照重试写入', async () => {
+  let attempts = 0
+  const value = { controlBaseUrl: 'https://example.test', modules: {}, cliSessions: [] }
+  const form = {
+    getSnapshot: () => ({ value, revision: 3, writable: true as const, status: 'ready' as const }),
+    subscribe: () => () => undefined,
+    mutate: async () => false,
+    set: async () => {
+      attempts += 1
+      return attempts === 2
+    },
+    unset: async () => undefined,
+  }
+  const store = createConfigFormSettingsStore({ get: () => form }, 'codingns')
+
+  assert.equal(await store.set('controlBaseUrl', 'https://updated.example'), true)
+  assert.equal(attempts, 2)
+})
+
 test('统一 RPC dispatch 只使用宿主传入的 peer context', async () => {
   const table = new CodingNsRpcTable()
   let received: unknown

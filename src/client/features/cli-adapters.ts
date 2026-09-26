@@ -42,7 +42,7 @@ export const cliAdaptersFeature: CodingNsClientFeatureModule = {
 }
 
 /** 设置页中的 Agent 列表和详情模态框。 */
-export function CliAdaptersPanel({ services, enabled }: FeaturePanelProps): ReactElement {
+export function CliAdaptersPanel({ services, enabled, notify }: FeaturePanelProps): ReactElement {
   const t = useCodingNsTranslator(services.locale)
   const [catalog, setCatalog] = useState<readonly CodingNsCliAdapterDescriptor[]>([])
   const [selected, setSelected] = useState<CodingNsCliAdapterDescriptor | null>(null)
@@ -53,7 +53,7 @@ export function CliAdaptersPanel({ services, enabled }: FeaturePanelProps): Reac
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [restoringSessionId, setRestoringSessionId] = useState<string | null>(null)
   const [archivingSessionId, setArchivingSessionId] = useState<string | null>(null)
-  const [message, setMessage] = useState('')
+  const [modelsError, setModelsError] = useState('')
   const disabled = !enabled
 
   useEffect(() => {
@@ -62,7 +62,7 @@ export function CliAdaptersPanel({ services, enabled }: FeaturePanelProps): Reac
     setLoading(true)
     void callCliRpc<readonly CodingNsCliAdapterDescriptor[]>(services.rpc, 'catalog', {})
       .then((value) => { if (active) setCatalog(value) })
-      .catch((error: unknown) => { if (active) setMessage(errorMessage(error)) })
+      .catch((error: unknown) => { if (active) notify({ kind: 'error', message: errorMessage(error) }) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [disabled, services.rpc])
@@ -76,7 +76,7 @@ export function CliAdaptersPanel({ services, enabled }: FeaturePanelProps): Reac
     setSessionsLoading(true)
     void listCliSessions(services.rpc)
       .then((value) => { if (active) setSessions(value) })
-      .catch((error: unknown) => { if (active) setMessage(errorMessage(error)) })
+      .catch((error: unknown) => { if (active) notify({ kind: 'error', message: errorMessage(error) }) })
       .finally(() => { if (active) setSessionsLoading(false) })
     return () => { active = false }
   }, [disabled, services.rpc])
@@ -88,10 +88,10 @@ export function CliAdaptersPanel({ services, enabled }: FeaturePanelProps): Reac
     }
     let active = true
     setModels(null)
-    setMessage('')
+    setModelsError('')
     void callCliRpc<CodingNsCliModelCatalog>(services.rpc, 'models', { adapterId: selected.id })
       .then((value) => { if (active) setModels(value) })
-      .catch((error: unknown) => { if (active) setMessage(errorMessage(error)) })
+      .catch((error: unknown) => { if (active) { const message = errorMessage(error); setModelsError(message); notify({ kind: 'error', message }) } })
     return () => { active = false }
   }, [disabled, selected, services.rpc])
 
@@ -99,13 +99,13 @@ export function CliAdaptersPanel({ services, enabled }: FeaturePanelProps): Reac
   const buttonStyle = { ...dshSettingsButtonStyle, cursor: disabled ? 'not-allowed' : 'pointer' }
   const toggleAdapter = async (adapter: CodingNsCliAdapterDescriptor, next: boolean): Promise<void> => {
     setBusyAdapterId(adapter.id)
-    setMessage('')
     try {
       await callCliRpc(services.rpc, 'adapter/set', { adapterId: adapter.id, enabled: next })
       const refreshed = await callCliRpc<readonly CodingNsCliAdapterDescriptor[]>(services.rpc, 'catalog', {})
       setCatalog(refreshed)
+      notify({ kind: 'success', message: next ? `已启用 ${adapter.name}` : `已停用 ${adapter.name}` })
     } catch (error) {
-      setMessage(errorMessage(error))
+      notify({ kind: 'error', message: errorMessage(error) })
     } finally {
       setBusyAdapterId(null)
     }
@@ -113,11 +113,11 @@ export function CliAdaptersPanel({ services, enabled }: FeaturePanelProps): Reac
 
   const restoreSession = async (record: CodingNsCliSessionRecord): Promise<void> => {
     setRestoringSessionId(record.dshSessionId)
-    setMessage('')
     try {
       await restoreCliSession(services.rpc, record)
+      notify({ kind: 'success', message: `已打开 ${record.title ?? record.adapterId} 会话` })
     } catch (error) {
-      setMessage(errorMessage(error))
+      notify({ kind: 'error', message: errorMessage(error) })
     } finally {
       setRestoringSessionId(null)
     }
@@ -125,12 +125,12 @@ export function CliAdaptersPanel({ services, enabled }: FeaturePanelProps): Reac
 
   const archiveSession = async (record: CodingNsCliSessionRecord): Promise<void> => {
     setArchivingSessionId(record.dshSessionId)
-    setMessage('')
     try {
       await archiveCliSession(services.rpc, record.dshSessionId)
       setSessions((current) => current.filter((item) => item.dshSessionId !== record.dshSessionId))
+      notify({ kind: 'success', message: `已移除 ${record.title ?? record.adapterId} 会话` })
     } catch (error) {
-      setMessage(errorMessage(error))
+      notify({ kind: 'error', message: errorMessage(error) })
     } finally {
       setArchivingSessionId(null)
     }
@@ -168,11 +168,10 @@ export function CliAdaptersPanel({ services, enabled }: FeaturePanelProps): Reac
       onArchive: (record) => { void archiveSession(record) },
       t,
     }),
-    message && createElement('div', { role: 'alert', style: { marginTop: 10, color: dshThemeColor.error } }, message),
     selected !== null && createElement(AdapterDetailsDialog, {
       adapter: selected,
       models,
-      loading: selected.installed && selected.enabled && models === null && !message,
+      loading: selected.installed && selected.enabled && models === null && modelsError === '',
       onClose: () => setSelected(null),
       buttonStyle,
       t,

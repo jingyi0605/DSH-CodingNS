@@ -45,6 +45,17 @@ test('终端布局和 xterm 默认值与 DSH 0.1.6 内置终端一致', async ()
   assert.match(xterm, /ui-monospace, SFMono-Regular, Menlo, Consolas, monospace/u)
 })
 
+test('终端外观设置按实际值展示且光标闪烁位于字号之前', async () => {
+  const source = await readFile(join(projectRoot, 'src/client/features/terminal-enhancement-panel.ts'), 'utf8')
+  const blinkIndex = source.indexOf("createElement(Field, { label: t('terminal.cursorBlink') }")
+  const fontSizeIndex = source.indexOf("createElement(NumberField, { label: t('terminal.fontSize'),")
+  assert.ok(blinkIndex >= 0 && fontSizeIndex >= 0 && blinkIndex < fontSizeIndex)
+  assert.match(source, /background: appearance\.background \?\? '#111111'/u)
+  assert.match(source, /fontSize: appearance\.fontSize \?\? 13/u)
+  assert.match(source, /scrollback: appearance\.scrollback \?\? 1000/u)
+  assert.doesNotMatch(source, /inheritLabel/u)
+})
+
 test('xterm 不会用 Shell 默认标题覆盖调试终端标题', async () => {
   const source = await readFile(join(projectRoot, 'src/client/terminal/xterm-view.ts'), 'utf8')
 

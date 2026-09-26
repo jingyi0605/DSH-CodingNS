@@ -102,7 +102,7 @@ export async function installTerminalController(
 
   const documentPath = provider.documentPath
   if (documentPath === undefined) {
-    throw new Error('终端强化需要文件型 DSH 设置 Provider，以便持久保存 Host ID 和终端映射')
+    throw new Error('终端增强需要文件型 DSH 设置 Provider，以便持久保存 Host ID 和终端映射')
   }
   const identity = await (options.resolveIdentity ?? resolveTerminalStartupIdentity)(documentPath)
   return createController(ctx, {

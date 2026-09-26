@@ -7,7 +7,7 @@ import {
 } from '../data/build/dist/shared/index.js'
 import { CodingNsSettingsSchema } from '../data/build/dist/host/settings.js'
 
-test('终端强化默认继承 DSH 主题并使用系统推荐 profile', () => {
+test('终端增强默认继承 DSH 主题并使用系统推荐 profile', () => {
   assert.equal(CODINGNS_TERMINAL_ENHANCEMENT_FIELD, 'terminalEnhancement')
   assert.deepEqual(DEFAULT_TERMINAL_ENHANCEMENT_SETTINGS, {
     bindingScope: 'workspace',

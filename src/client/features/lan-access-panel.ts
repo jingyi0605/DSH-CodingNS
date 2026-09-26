@@ -17,7 +17,7 @@ import {
 import { useCodingNsTranslator } from '../locale.js'
 
 /** “局域网访问DSH”设置卡片：只配置一条监听并转发到当前 DSH Web。 */
-export function LanAccessPanel({ services, enabled, snapshot: settingsSnapshot }: FeaturePanelProps): ReactElement {
+export function LanAccessPanel({ services, enabled, snapshot: settingsSnapshot, notify }: FeaturePanelProps): ReactElement {
   const { rpc, settings } = services
   const t = useCodingNsTranslator(services.locale)
   const [savedSettings, setSavedSettings] = useState<LanAccessDshSettings | undefined>()
@@ -31,7 +31,6 @@ export function LanAccessPanel({ services, enabled, snapshot: settingsSnapshot }
   const [detectedDshPorts, setDetectedDshPorts] = useState<number[]>([])
   const [snapshot, setSnapshot] = useState<LanAccessDshSnapshot | null>(null)
   const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState('')
 
   useEffect(() => {
     if (disabled) return
@@ -65,11 +64,10 @@ export function LanAccessPanel({ services, enabled, snapshot: settingsSnapshot }
 
   const run = async (operation: () => Promise<void>): Promise<void> => {
     setBusy(true)
-    setMessage('')
     try {
       await operation()
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
+      notify({ kind: 'error', message: error instanceof Error ? error.message : String(error) })
     } finally {
       setBusy(false)
     }
@@ -79,7 +77,7 @@ export function LanAccessPanel({ services, enabled, snapshot: settingsSnapshot }
     const result = await callRpc<{ ports: number[] }>(rpc, 'lanAccessDsh/detect', {})
     setDetectedDshPorts(result.ports)
     if (result.ports.length === 1) setDshPort(String(result.ports[0]))
-    setMessage(result.ports.length === 0 ? t('lan.detectNone') : t('lan.detected', { ports: result.ports.join('、') }))
+    notify({ kind: 'info', message: result.ports.length === 0 ? t('lan.detectNone') : t('lan.detected', { ports: result.ports.join('、') }) })
   })
 
   const saveMapping = async (nextAutoStart = autoStart): Promise<void> => {
@@ -90,7 +88,7 @@ export function LanAccessPanel({ services, enabled, snapshot: settingsSnapshot }
   const saveMappingOnBlur = (): void => {
     if (!autoStart) return
     void saveMapping().catch((error: unknown) => {
-      setMessage(error instanceof Error ? error.message : String(error))
+      notify({ kind: 'error', message: error instanceof Error ? error.message : String(error) })
     })
   }
 
@@ -106,20 +104,20 @@ export function LanAccessPanel({ services, enabled, snapshot: settingsSnapshot }
     setSnapshot(current)
     setDshPort(String(current.dshPort))
     setListenPort(String(current.listenPort))
-    setMessage(t('lan.started', { host: current.listenHost, port: current.actualListenPort ?? current.listenPort, dshPort: current.dshPort }))
+    notify({ kind: 'success', message: t('lan.started', { host: current.listenHost, port: current.actualListenPort ?? current.listenPort, dshPort: current.dshPort }) })
   })
 
   const stop = (): Promise<void> => run(async () => {
     await callRpc(rpc, 'lanAccessDsh/stop', {})
     setSnapshot(null)
-    setMessage(t('lan.stopped'))
+    notify({ kind: 'success', message: t('lan.stopped') })
   })
 
   const toggleAutoStart = (): Promise<void> => run(async () => {
     const next = !autoStart
     await saveMapping(next)
     setAutoStart(next)
-    setMessage(next ? t('lan.autoStartOn') : t('lan.autoStartOff'))
+    notify({ kind: 'success', message: next ? t('lan.autoStartOn') : t('lan.autoStartOff') })
   })
 
   const fieldStyle = dshSettingsFieldStyle
@@ -156,7 +154,6 @@ export function LanAccessPanel({ services, enabled, snapshot: settingsSnapshot }
       snapshot && createElement('button', { type: 'button', disabled: controlsDisabled || busy, onClick: () => void stop(), style: buttonStyle }, t('lan.stop')),
     ),
     snapshot && createElement('div', { role: 'status', style: dshSettingsNoteStyle }, t('lan.forwarding', { host: snapshot.listenHost, port: snapshot.actualListenPort ?? snapshot.listenPort, dshPort: snapshot.dshPort })),
-    message && createElement('div', { role: 'status', style: { color: message.includes('已') ? dshThemeColor.success : dshThemeColor.error } }, message),
   )
 }
 

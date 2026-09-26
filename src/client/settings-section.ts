@@ -1,4 +1,4 @@
-import { createElement, useState, useSyncExternalStore } from 'react'
+import { createElement, useEffect, useState, useSyncExternalStore } from 'react'
 import type { ReactElement } from 'react'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
@@ -26,11 +26,13 @@ import {
   dshSettingsSummaryStyle,
   dshSettingsSummaryTextStyle,
   dshSettingsTitleStyle,
+  dshSettingsToastStyle,
   dshThemeColor,
 } from './theme.js'
 import { useCodingNsTranslator } from './locale.js'
 import { CODINGNS_VERSION, DSH_COMPATIBILITY, isLegacyDshVersion } from '../shared/contracts/version.js'
 import type { CodingNsSettingsSnapshot, CodingNsSettingsStore } from '../dsh-capabilities/settings-store.js'
+import type { SettingsNotice } from './features/types.js'
 
 const CODINGNS_GITHUB_URL = 'https://github.com/jingyi0605/Codingns4DSH'
 
@@ -67,10 +69,24 @@ export function CodingNsSettingsSection({ settings, registry, services, restartS
     () => settings.getSnapshot(),
   )
   const t = useCodingNsTranslator(services.locale)
+  const [toast, setToast] = useState<SettingsNotice | null>(null)
+
+  useEffect(() => {
+    if (toast === null) return
+    const timer = globalThis.setTimeout(() => setToast(null), 3200)
+    return () => globalThis.clearTimeout(timer)
+  }, [toast])
+
+  const notify = (notice: SettingsNotice): void => setToast(notice)
 
   return createElement(
     'section',
     { style: dshSettingsPageStyle },
+    toast === null ? null : createElement('div', {
+      role: toast.kind === 'error' ? 'alert' : 'status',
+      'aria-live': 'polite',
+      style: { ...dshSettingsToastStyle, borderColor: toast.kind === 'error' ? dshThemeColor.error : toast.kind === 'success' ? dshThemeColor.success : dshThemeColor.border },
+    }, toast.message),
     createElement('header', { style: dshSettingsHeaderStyle },
       createElement('h2', { style: dshSettingsTitleStyle }, t('settings.title')),
       createElement('p', { style: dshSettingsSubtitleStyle }, t('settings.subtitle')),
@@ -82,6 +98,7 @@ export function CodingNsSettingsSection({ settings, registry, services, restartS
         snapshot,
         services,
         restartStates,
+        notify,
       })),
     ),
     createElement('details', { style: { alignSelf: 'center', display: 'flex', flexDirection: 'column-reverse', alignItems: 'center', marginTop: 4, color: dshThemeColor.labelTertiary, textAlign: 'center', fontSize: 12, lineHeight: 1.5 } },
@@ -99,36 +116,33 @@ interface FeatureCardProps {
   readonly snapshot: CodingNsSettingsSnapshot<CodingNsSettings>
   readonly services: CodingNsClientServices
   readonly restartStates: RestartFeatureStates
+  readonly notify: (notice: SettingsNotice) => void
 }
 
 /** 通用功能模块卡片：标题栏开关由 descriptor.ui 决定，内容由模块自己提供。 */
-function FeatureCard({ entry, snapshot, services, restartStates }: FeatureCardProps): ReactElement {
+function FeatureCard({ entry, snapshot, services, restartStates, notify }: FeatureCardProps): ReactElement {
   const { module, ui } = entry
   const t = useCodingNsTranslator(services.locale)
-  const [writeError, setWriteError] = useState<string | null>(null)
   const versionCompatible = isFeatureDshVersionCompatible(module.descriptor, services.dshVersion)
   const requestedEnabled = isFeatureEnabled(module.descriptor, snapshot.value)
   const enabled = versionCompatible && requestedEnabled
-  const effectiveEnabled = module.descriptor.activation === 'restart'
-    ? versionCompatible && (restartStates[module.descriptor.name] ?? module.descriptor.enabledByDefault)
-    : enabled
   const panel = module.settingsPanel
   // 常驻模块不提供关闭入口；设置未就绪或只读时也不允许切换。
   const switchDisabled = ui.alwaysEnabled === true || !versionCompatible || snapshot.status === 'loading' || !snapshot.writable
 
   const toggle = (next: boolean): void => {
-    setWriteError(null)
     if (!versionCompatible) {
-      setWriteError(t('settings.versionBlocked', {
+      notify({ kind: 'error', message: t('settings.versionBlocked', {
         version: services.dshVersion,
         minimum: module.descriptor.minimumDshVersion ?? '未知版本',
-      }))
+      }) })
       return
     }
     void services.settings
       .mutate([{ op: 'set', path: [CODINGNS_MODULES_FIELD, module.descriptor.name], value: next }])
+      .then(() => notify({ kind: 'success', message: t(next ? 'settings.moduleEnabled' : 'settings.moduleDisabled', { label: t(ui.labelKey ?? ui.label) }) }))
       .catch((cause: unknown) => {
-        setWriteError(cause instanceof Error ? cause.message : String(cause))
+        notify({ kind: 'error', message: cause instanceof Error ? cause.message : String(cause) })
       })
   }
 
@@ -162,16 +176,7 @@ function FeatureCard({ entry, snapshot, services, restartStates }: FeatureCardPr
           minimum: module.descriptor.minimumDshVersion ?? '未知版本',
         }))
         : null,
-      module.descriptor.activation !== 'restart' ? null : createElement(
-        'div',
-        { role: 'status', style: { display: 'flex', flexDirection: 'column', gap: 4, padding: 10, border: `1px solid ${dshThemeColor.border}`, borderRadius: 6, fontSize: 13 } },
-        createElement('span', undefined, t('settings.restartTarget', { state: enabled ? t('settings.enabled') : t('settings.disabled') })),
-        effectiveEnabled === enabled
-          ? createElement('span', undefined, t('settings.runtimeReported'))
-          : createElement('strong', undefined, t('settings.restartRequired')),
-      ),
-      panel === undefined ? null : createElement(panel, { services, enabled, snapshot }),
-      writeError === null ? null : createElement('div', { role: 'alert', style: { color: dshThemeColor.error } }, writeError),
+      panel === undefined ? null : createElement(panel, { services, enabled, snapshot, notify }),
     ),
   )
 }

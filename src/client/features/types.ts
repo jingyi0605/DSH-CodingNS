@@ -36,6 +36,15 @@ export interface CodingNsClientServices {
   readonly uiContext?: Context
 }
 
+/** 设置页统一反馈的提示级别。 */
+export type SettingsNoticeKind = 'success' | 'error' | 'info'
+
+/** 由功能面板提交给设置页顶部 Toast 的反馈。 */
+export interface SettingsNotice {
+  readonly kind: SettingsNoticeKind
+  readonly message: string
+}
+
 /** 设置卡片传给模块面板的属性。 */
 export interface FeaturePanelProps {
   /** 宿主注入的服务，与模块 start 中拿到的是同一份。 */
@@ -44,6 +53,8 @@ export interface FeaturePanelProps {
   readonly enabled: boolean
   /** 设置快照，用于读取表单初值和可写状态。 */
   readonly snapshot: CodingNsSettingsSnapshot<CodingNsSettings>
+  /** 将设置写入结果显示在设置区域顶部。 */
+  readonly notify: (notice: SettingsNotice) => void
 }
 
 /**

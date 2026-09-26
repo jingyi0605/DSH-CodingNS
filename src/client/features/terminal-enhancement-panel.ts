@@ -14,13 +14,16 @@ import {
   dshSettingsButtonStyle,
   dshSettingsFieldLabelStyle,
   dshSettingsFieldStyle,
+  dshSettingsGridStyle,
   dshSettingsHelpStyle,
   dshSettingsNoteStyle,
   dshSettingsRowStyle,
+  dshSettingsSectionHeaderStyle,
   dshThemeColor,
 } from '../theme.js'
 import type { CodingNsRpcClient, FeaturePanelProps } from './types.js'
 import { useCodingNsTranslator, type CodingNsTranslator } from '../locale.js'
+import { debugInfo, debugWarn } from '../../shared/debug.js'
 
 const profileLabels: Readonly<Record<TerminalProfileId, string>> = {
   system: 'terminal.systemRecommended',
@@ -32,41 +35,46 @@ const profileLabels: Readonly<Record<TerminalProfileId, string>> = {
 }
 
 /** 终端默认行为与外观设置；终端 UI 由独立 Sidebar 模块负责。 */
-export function TerminalEnhancementPanel({ services, enabled, snapshot }: FeaturePanelProps): ReactElement {
+export function TerminalEnhancementPanel({ services, enabled, snapshot, notify }: FeaturePanelProps): ReactElement {
   const t = useCodingNsTranslator(services.locale)
   const value = snapshot.value?.terminalEnhancement ?? DEFAULT_TERMINAL_ENHANCEMENT_SETTINGS
-  const [fontFamily, setFontFamily] = useState(value.appearance.fontFamily ?? '')
-  const [message, setMessage] = useState('')
+  const appearance = resolveAppearance(value.appearance)
   const [hostStatus, setHostStatus] = useState<CodingNsTerminalStatus | null>(null)
   const disabled = !enabled || snapshot.status === 'loading' || !snapshot.writable
-  const customDisabled = disabled || value.appearance.theme !== 'custom'
 
-  useEffect(() => setFontFamily(value.appearance.fontFamily ?? ''), [value.appearance.fontFamily])
   useEffect(() => {
     let active = true
     void callTerminalStatus(services.rpc)
       .then((status) => { if (active) setHostStatus(status) })
       .catch((error: unknown) => {
-        if (active) setMessage(error instanceof Error ? error.message : String(error))
+        if (active) notify({ kind: 'error', message: error instanceof Error ? error.message : String(error) })
       })
     return () => { active = false }
   }, [services.rpc])
 
   const save = (next: TerminalEnhancementSettings): void => {
-    setMessage('')
+    debugInfo('codingns4dsh: client terminal settings write begin', {
+      field: CODINGNS_TERMINAL_ENHANCEMENT_FIELD,
+      bindingScope: next.bindingScope ?? 'workspace',
+    })
     void services.settings.set(CODINGNS_TERMINAL_ENHANCEMENT_FIELD, next)
-      .then(() => setMessage(t('terminal.saved')))
-      .catch((error: unknown) => setMessage(error instanceof Error ? error.message : String(error)))
+      .then((written) => {
+        if (!written) {
+          debugWarn('codingns4dsh: client terminal settings write rejected')
+          throw new Error(t('terminal.saveRejected'))
+        }
+        debugInfo('codingns4dsh: client terminal settings write success', {
+          bindingScope: next.bindingScope ?? 'workspace',
+        })
+        notify({ kind: 'success', message: t('terminal.saved') })
+      })
+      .catch((error: unknown) => notify({ kind: 'error', message: error instanceof Error ? error.message : String(error) }))
   }
   const updateAppearance = (patch: Partial<TerminalAppearanceSettings>): void => {
-    save({ ...value, appearance: { ...value.appearance, ...patch } })
+    save({ ...value, appearance: { ...value.appearance, theme: 'custom', ...patch } })
   }
-  const saveFontFamily = (): void => {
-    try {
-      updateAppearance({ fontFamily: normalizeFontFamily(fontFamily) })
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error))
-    }
+  const resetAppearance = (): void => {
+    save({ ...value, appearance: { ...DEFAULT_TERMINAL_ENHANCEMENT_SETTINGS.appearance, theme: 'custom' } })
   }
 
   return createElement(
@@ -83,7 +91,7 @@ export function TerminalEnhancementPanel({ services, enabled, snapshot }: Featur
         ? t('terminal.readingStatus')
         : t('terminal.currentStatus', { status: hostStatus.effectiveEnabled ? t('terminal.enhanced') : t('terminal.basic'), platform: platformLabel(hostStatus.platform, t) }),
     ),
-    createElement(Field, { label: t('terminal.newDefault') },
+    createElement(Field, { label: t('terminal.newDefault'), help: t('terminal.defaultProfileHelp') },
       createElement('select', {
         value: value.defaultProfile,
         disabled,
@@ -94,10 +102,9 @@ export function TerminalEnhancementPanel({ services, enabled, snapshot }: Featur
         { key: profile.profileId, value: profile.profileId, disabled: !profile.available },
         profile.label,
       ))),
-      createElement('small', { style: helpStyle }, t('terminal.defaultProfileHelp')),
       hostStatus?.fallbackReason === undefined ? null : createElement('small', { style: helpStyle }, hostStatus.fallbackReason),
     ),
-    createElement(Field, { label: t('terminal.bindingScope') },
+    createElement(Field, { label: t('terminal.bindingScope'), help: t('terminal.workspaceBindingHelp') },
       createElement('select', {
         value: value.bindingScope ?? 'workspace',
         disabled,
@@ -109,89 +116,102 @@ export function TerminalEnhancementPanel({ services, enabled, snapshot }: Featur
       },
       createElement('option', { value: 'workspace' }, t('terminal.workspaceBinding')),
       createElement('option', { value: 'session' }, t('terminal.sessionBinding'))),
-      createElement('small', { style: helpStyle }, t('terminal.workspaceBindingHelp')),
     ),
-    createElement(Field, { label: t('terminal.theme') },
-      createElement('select', {
-        value: value.appearance.theme,
-        disabled,
-        onChange: (event: { currentTarget: { value: string } }) => updateAppearance({ theme: event.currentTarget.value === 'custom' ? 'custom' : 'inherit' }),
-        style: fieldStyle,
-      },
-      createElement('option', { value: 'inherit' }, t('terminal.inheritDshTheme')),
-      createElement('option', { value: 'custom' }, t('terminal.custom'))),
+    createElement('div', { style: dshSettingsSectionHeaderStyle },
+      createElement('h3', { style: { margin: 0, color: dshThemeColor.labelPrimary, fontSize: 14, lineHeight: 1.35 } }, t('terminal.appearanceTitle')),
+      createElement('button', { type: 'button', disabled, onClick: resetAppearance, style: { ...buttonStyle, minWidth: 132 } }, t('terminal.resetAppearance')),
     ),
-    createElement(ColorField, { label: t('terminal.background'), value: value.appearance.background, disabled: customDisabled, onChange: (background) => updateAppearance({ background }), inheritLabel: t('terminal.inherit'), resetLabel: t('terminal.resetInherit') }),
-    createElement(ColorField, { label: t('terminal.foreground'), value: value.appearance.foreground, disabled: customDisabled, onChange: (foreground) => updateAppearance({ foreground }), inheritLabel: t('terminal.inherit'), resetLabel: t('terminal.resetInherit') }),
-    createElement(ColorField, { label: t('terminal.cursorColor'), value: value.appearance.cursorColor, disabled: customDisabled, onChange: (cursorColor) => updateAppearance({ cursorColor }), inheritLabel: t('terminal.inherit'), resetLabel: t('terminal.resetInherit') }),
-    createElement(Field, { label: t('terminal.font') },
-      createElement('div', { style: rowStyle },
-        createElement('input', {
-          type: 'text', value: fontFamily, maxLength: 128, disabled: customDisabled,
-          placeholder: t('terminal.inheritFont'),
-          onChange: (event: { currentTarget: { value: string } }) => setFontFamily(event.currentTarget.value),
-          onBlur: saveFontFamily,
-          style: { ...fieldStyle, flex: 1, minWidth: 0 },
-        }),
-        createElement(ResetButton, { disabled: customDisabled || value.appearance.fontFamily === null, onClick: () => { setFontFamily(''); updateAppearance({ fontFamily: null }) }, label: t('terminal.resetInherit') }),
-      ),
-    ),
-    createElement(NumberField, { label: t('terminal.fontSize'), value: value.appearance.fontSize, min: 10, max: 32, step: 1, disabled: customDisabled, onChange: (fontSize) => updateAppearance({ fontSize }), inheritLabel: t('terminal.inherit'), resetLabel: t('terminal.resetInherit') }),
-    createElement(NumberField, { label: t('terminal.lineHeight'), value: value.appearance.lineHeight, min: 1, max: 2, step: 0.1, disabled: customDisabled, onChange: (lineHeight) => updateAppearance({ lineHeight }), inheritLabel: t('terminal.inherit'), resetLabel: t('terminal.resetInherit') }),
-    createElement(Field, { label: t('terminal.cursorShape') },
-      createElement('select', {
-        value: value.appearance.cursorStyle ?? '', disabled: customDisabled,
-        onChange: (event: { currentTarget: { value: string } }) => updateAppearance({ cursorStyle: parseCursorStyle(event.currentTarget.value) }),
-        style: fieldStyle,
-      },
-      createElement('option', { value: '' }, t('terminal.cursorInherit')),
-      createElement('option', { value: 'block' }, t('terminal.cursorBlock')),
-      createElement('option', { value: 'bar' }, t('terminal.cursorBar')),
-      createElement('option', { value: 'underline' }, t('terminal.cursorUnderline'))),
-    ),
-    createElement(Field, { label: t('terminal.cursorBlink') },
-      createElement('div', { style: rowStyle },
-        createElement('label', { style: { display: 'inline-flex', alignItems: 'center', gap: 8 } },
+    createElement('div', { style: dshSettingsGridStyle },
+      createElement(ColorField, { label: t('terminal.background'), value: appearance.background, disabled, onChange: (background) => updateAppearance({ background }) }),
+      createElement(ColorField, { label: t('terminal.foreground'), value: appearance.foreground, disabled, onChange: (foreground) => updateAppearance({ foreground }) }),
+      createElement(ColorField, { label: t('terminal.cursorColor'), value: appearance.cursorColor, disabled, onChange: (cursorColor) => updateAppearance({ cursorColor }) }),
+      createElement(Field, { label: t('terminal.cursorBlink') },
+        createElement('label', { style: { display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 36, opacity: disabled ? 0.6 : 1 } },
           createElement('input', {
             type: 'checkbox', role: 'switch', 'aria-label': t('terminal.cursorBlink'),
-            checked: value.appearance.cursorBlink ?? false, disabled: customDisabled,
+            checked: appearance.cursorBlink, disabled,
             onChange: (event: { currentTarget: { checked: boolean } }) => updateAppearance({ cursorBlink: event.currentTarget.checked }),
           }),
-          value.appearance.cursorBlink === null ? t('terminal.inherit') : (value.appearance.cursorBlink ? t('terminal.cursorOn') : t('terminal.cursorOff')),
+          appearance.cursorBlink ? t('terminal.cursorOn') : t('terminal.cursorOff'),
         ),
-        createElement(ResetButton, { disabled: customDisabled || value.appearance.cursorBlink === null, onClick: () => updateAppearance({ cursorBlink: null }), label: t('terminal.resetInherit') }),
       ),
+      createElement(NumberField, { label: t('terminal.fontSize'), value: appearance.fontSize, min: 10, max: 32, step: 1, disabled, onChange: (fontSize) => updateAppearance({ fontSize }) }),
+      createElement(NumberField, { label: t('terminal.lineHeight'), value: appearance.lineHeight, min: 1, max: 2, step: 0.1, disabled, onChange: (lineHeight) => updateAppearance({ lineHeight }) }),
+      createElement(Field, { label: t('terminal.cursorShape') },
+        createElement('select', {
+          value: appearance.cursorStyle, disabled,
+          onChange: (event: { currentTarget: { value: string } }) => updateAppearance({ cursorStyle: parseCursorStyle(event.currentTarget.value) }),
+          style: fieldStyle,
+        },
+        createElement('option', { value: 'block' }, t('terminal.cursorBlock')),
+        createElement('option', { value: 'bar' }, t('terminal.cursorBar')),
+        createElement('option', { value: 'underline' }, t('terminal.cursorUnderline'))),
+      ),
+      createElement(NumberField, { label: t('terminal.scrollback'), value: appearance.scrollback, min: 1000, max: 100000, step: 1000, disabled, onChange: (scrollback) => updateAppearance({ scrollback }) }),
     ),
-    createElement(NumberField, { label: t('terminal.scrollback'), value: value.appearance.scrollback, min: 1000, max: 100000, step: 1000, disabled, onChange: (scrollback) => updateAppearance({ scrollback }), inheritLabel: t('terminal.inherit'), resetLabel: t('terminal.resetInherit') }),
-    message && createElement('div', { role: 'status', style: { color: message.includes('已保存') ? dshThemeColor.success : dshThemeColor.error } }, message),
   )
 }
 
-function Field({ label, children }: { readonly label: string; readonly children?: ReactNode }): ReactElement {
-  return createElement('label', { style: { display: 'flex', flexDirection: 'column', gap: 6 } }, createElement('span', { style: dshSettingsFieldLabelStyle }, label), children)
+function Field({ label, help, children }: { readonly label: string; readonly help?: string; readonly children?: ReactNode }): ReactElement {
+  return createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+    createElement('div', { style: fieldHeadingStyle },
+      createElement('span', { style: dshSettingsFieldLabelStyle }, label),
+      help === undefined ? null : createElement(InfoButton, { label: help }),
+    ),
+    children,
+  )
 }
 
-function ColorField({ label, value, disabled, onChange, inheritLabel, resetLabel }: { readonly label: string; readonly value: string | null; readonly disabled: boolean; readonly onChange: (value: string | null) => void; readonly inheritLabel: string; readonly resetLabel: string }): ReactElement {
+function InfoButton({ label }: { readonly label: string }): ReactElement {
+  return createElement('button', {
+    type: 'button',
+    title: label,
+    'aria-label': label,
+    style: infoButtonStyle,
+  }, 'ⓘ')
+}
+
+function ColorField({ label, value, disabled, onChange }: { readonly label: string; readonly value: string; readonly disabled: boolean; readonly onChange: (value: string | null) => void }): ReactElement {
   return createElement(Field, { label }, createElement('div', { style: rowStyle },
-    createElement('input', { type: 'color', value: value ?? '#000000', disabled, 'aria-label': label, onChange: (event: { currentTarget: { value: string } }) => onChange(event.currentTarget.value), style: { width: 48, height: 34 } }),
-    createElement('code', { style: { flex: 1 } }, value ?? inheritLabel),
-    createElement(ResetButton, { disabled: disabled || value === null, onClick: () => onChange(null), label: resetLabel }),
+    createElement('input', { type: 'color', value, disabled, 'aria-label': label, onChange: (event: { currentTarget: { value: string } }) => onChange(event.currentTarget.value), style: { width: 48, height: 34 } }),
+    createElement('code', { style: { flex: 1 } }, value),
   ))
 }
 
-function NumberField({ label, value, min, max, step, disabled, onChange, inheritLabel, resetLabel }: { readonly label: string; readonly value: number | null; readonly min: number; readonly max: number; readonly step: number; readonly disabled: boolean; readonly onChange: (value: number | null) => void; readonly inheritLabel: string; readonly resetLabel: string }): ReactElement {
+function NumberField({ label, value, min, max, step, disabled, onChange }: { readonly label: string; readonly value: number; readonly min: number; readonly max: number; readonly step: number; readonly disabled: boolean; readonly onChange: (value: number | null) => void }): ReactElement {
   return createElement(Field, { label }, createElement('div', { style: rowStyle },
     createElement('input', {
-      type: 'number', value: value ?? '', min, max, step, disabled, placeholder: inheritLabel,
+      type: 'number', value, min, max, step, disabled,
       onChange: (event: { currentTarget: { value: string } }) => onChange(event.currentTarget.value === '' ? null : Number(event.currentTarget.value)),
       style: { ...fieldStyle, flex: 1, minWidth: 0 },
     }),
-    createElement(ResetButton, { disabled: disabled || value === null, onClick: () => onChange(null), label: resetLabel }),
   ))
 }
 
-function ResetButton({ disabled, onClick, label }: { readonly disabled: boolean; readonly onClick: () => void; readonly label: string }): ReactElement {
-  return createElement('button', { type: 'button', disabled, onClick, style: buttonStyle }, label)
+interface ResolvedTerminalAppearance {
+  readonly background: string
+  readonly foreground: string
+  readonly cursorColor: string
+  readonly fontSize: number
+  readonly lineHeight: number
+  readonly cursorStyle: NonNullable<TerminalAppearanceSettings['cursorStyle']>
+  readonly cursorBlink: boolean
+  readonly scrollback: number
+}
+
+/** 将旧配置中的 null 映射为 xterm 当前实际使用的默认值，设置页始终显示可编辑值。 */
+function resolveAppearance(appearance: TerminalAppearanceSettings): ResolvedTerminalAppearance {
+  const foreground = appearance.foreground ?? '#f3f3f3'
+  return {
+    background: appearance.background ?? '#111111',
+    foreground,
+    cursorColor: appearance.cursorColor ?? foreground,
+    fontSize: appearance.fontSize ?? 13,
+    lineHeight: appearance.lineHeight ?? 1,
+    cursorStyle: appearance.cursorStyle ?? 'block',
+    cursorBlink: appearance.cursorBlink ?? true,
+    scrollback: appearance.scrollback ?? 1000,
+  }
 }
 
 function profileOptions(
@@ -230,13 +250,6 @@ async function callTerminalStatus(rpc: CodingNsRpcClient): Promise<CodingNsTermi
   return response.value as CodingNsTerminalStatus
 }
 
-function normalizeFontFamily(value: string): string | null {
-  const trimmed = value.trim()
-  if (trimmed === '') return null
-  if (trimmed.length > 128 || /[\u0000-\u001F\u007F]/u.test(trimmed)) throw new TypeError('字体名称格式无效')
-  return trimmed
-}
-
 function parseCursorStyle(value: string): TerminalAppearanceSettings['cursorStyle'] {
   return value === 'block' || value === 'bar' || value === 'underline' ? value : null
 }
@@ -246,3 +259,5 @@ const buttonStyle: CSSProperties = { ...dshSettingsButtonStyle, flex: '0 0 auto'
 const rowStyle: CSSProperties = dshSettingsRowStyle
 const helpStyle: CSSProperties = dshSettingsHelpStyle
 const noteStyle: CSSProperties = dshSettingsNoteStyle
+const fieldHeadingStyle: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }
+const infoButtonStyle: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, flex: '0 0 20px', padding: 0, border: `1px solid ${dshThemeColor.border}`, borderRadius: '50%', color: dshThemeColor.labelSecondary, background: dshThemeColor.surfaceSubtle, cursor: 'help', fontSize: 12, lineHeight: 1 }
