@@ -178,27 +178,35 @@ DSH 设置按钮旁的账户入口会显示登录状态、访问路径与延迟�
 
 **环境要求**：DSH 在 `>=0.1.5-rc.3 <0.1.8-0` 范围内（插件与 DSH 版本独立发布，安装期与运行期都会拒绝不兼容版本）· Node.js `>= 22.19` · `PATH` 中有 `pnpm`（`dsh plugin` 转发给 pnpm）· 可选：Agent CLI，以及 macOS/Linux 上用于持久终端的 `tmux`（`brew install tmux` / `sudo apt install tmux`）。
 
-Codingns4DSH 需要 Profile 同时包含 DSH Web 应用层，因此先用官方 `web` 模板创建 Profile：
+### 最简单的安装方式：使用内置 `web` Profile
+
+DSH 的 `web` Profile 会在首次使用时自动初始化，不需要手动创建配置文件，也不需要执行 `--dump-config`：
 
 ```bash
-dsh codingns --from-default-profile web --dump-config   # 创建 Profile（只打印层结构，不启动）
-dsh plugin --profile codingns add codingns4dsh@0.1.1    # 安装 Bundle
-dsh codingns                                            # 启动 DSH
+dsh plugin --profile web add @jingyi0605/codingns4dsh@0.1.1
+dsh web
 ```
 
-也可直接装进标准 `web` Profile：`dsh plugin --profile web add codingns4dsh@0.1.1`，然后 `dsh web`。
+### 可选：使用独立 Profile
 
-- **不要**把 `dsh plugin --profile <新名字> add …` 当作新 Profile 的第一条命令：全新自定义 Profile 只含 `@deepseek-ai/dsh-base`，会报 `entry "terminal-controller" not found` 且没有浏览器界面。
+如果不想修改内置的 `web` Profile，再创建一个独立 Profile。这里的 `--dump-config` 只用于初始化并检查 Profile，不是插件安装的必需步骤：
+
+```bash
+dsh codingns --from-default-profile web --dump-config
+dsh plugin --profile codingns add @jingyi0605/codingns4dsh@0.1.1
+dsh codingns
+```
+
+- **不要**用 `dsh plugin --profile <新名字> add …` 创建需要 Web 界面的独立 Profile：该命令只会从 `@deepseek-ai/dsh-base` 初始化，之后会报 `entry "terminal-controller" not found`。需要独立 Profile 时，请使用上面的 `--from-default-profile web`。
 - npm 返回 404 说明该版本还没发布，请改用下面的源码安装。
 
 ```bash
-# 验证
-dsh plugin --profile codingns list --depth 0     # -> codingns4dsh <版本>
-dsh --profile codingns --dump-config             # 应看到 id: codingns4dsh，terminal-controller 为 disabled
+# 可选：验证安装结果
+dsh plugin --profile web list --depth 0           # -> codingns4dsh <版本>
 
 # 升级、固定版本、卸载（之后重启 DSH）
-dsh plugin --profile codingns add codingns4dsh@<版本>
-dsh plugin --profile codingns remove codingns4dsh
+dsh plugin --profile web add @jingyi0605/codingns4dsh@<版本>
+dsh plugin --profile web remove @jingyi0605/codingns4dsh
 ```
 
 **从源码安装**（npm 不可用，或直接运行本地检出）：
@@ -206,8 +214,8 @@ dsh plugin --profile codingns remove codingns4dsh
 ```bash
 git clone https://github.com/jingyi0605/Codingns4DSH.git && cd Codingns4DSH
 pnpm install && pnpm build
-dsh codingns --from-default-profile web --dump-config
-dsh plugin --profile codingns add "$PWD"            # 或 npm pack 后 add ./codingns4dsh-0.1.1.tgz
+dsh plugin --profile web add "$PWD"                # 或 npm pack 后 add ./jingyi0605-codingns4dsh-0.1.1.tgz
+dsh web
 ```
 
 安装目录是链接依赖，改完源码后重新 `pnpm build`（或保持 `pnpm dev:watch`）并重启 DSH。
@@ -236,7 +244,7 @@ dsh plugin --profile codingns add "$PWD"            # 或 npm pack 后 add ./cod
 
 ## 故障排查
 
-- **版本** —— `dsh --version`、`dsh plugin --profile codingns list --depth 0`、`npm view codingns4dsh version`；安装与启动都会拒绝范围外的 DSH。
+- **版本** —— `dsh --version`、`dsh plugin --profile web list --depth 0`（独立 Profile 请替换 `web`）、`npm view @jingyi0605/codingns4dsh version`；安装与启动都会拒绝范围外的 DSH。
 - **`patch: entry "terminal-controller" not found`** —— Profile 缺少 Web 应用层，按上文用 `web` 模板重建。
 - **检测不到 Agent** —— 在 Host 上执行 `<cli> --version`；确认其目录在启动 DSH 的进程的 `PATH` 中（图形启动器常不同）；用各家工具登录后重启 DSH。
 - **终端** —— macOS/Linux 持久模式需要 `tmux`；启停模块与修改绑定范围需重启；终端按工作区寻址。

@@ -173,27 +173,35 @@ The “access” line tells you whether you entered DSH Web locally, over the LA
 
 **Requirements**: DSH inside `>=0.1.5-rc.3 <0.1.8-0` (plugin and DSH versions ship independently; both the installer and the runtime reject unsupported versions) · Node.js `>= 22.19` · `pnpm` on `PATH` (`dsh plugin` forwards to pnpm) · optional: Agent CLIs, and `tmux` on macOS/Linux for persistent terminals (`brew install tmux` / `sudo apt install tmux`).
 
-Codingns4DSH needs a profile that also contains the DSH Web application layer, so create the profile from the shipped `web` template first:
+### Simplest install: use the built-in `web` profile
+
+DSH automatically initializes the `web` profile on first use. You do not need to create a config file or run `--dump-config`:
 
 ```bash
-dsh codingns --from-default-profile web --dump-config   # create profile (prints layers, does not start)
-dsh plugin --profile codingns add codingns4dsh@0.1.1    # install the bundle
-dsh codingns                                            # start DSH
+dsh plugin --profile web add @jingyi0605/codingns4dsh@0.1.1
+dsh web
 ```
 
-Or install into the standard web profile: `dsh plugin --profile web add codingns4dsh@0.1.1`, then `dsh web`.
+### Optional: use a separate profile
 
-- **Do not** create a fresh profile with the plugin as its first command: a new custom profile only contains `@deepseek-ai/dsh-base`, so the patch reports `entry "terminal-controller" not found` and there is no browser UI.
+If you do not want to modify the built-in `web` profile, create a separate profile. Here `--dump-config` only initializes and inspects the profile; it is not required for installing the plugin:
+
+```bash
+dsh codingns --from-default-profile web --dump-config
+dsh plugin --profile codingns add @jingyi0605/codingns4dsh@0.1.1
+dsh codingns
+```
+
+- **Do not** use `dsh plugin --profile <new-name> add ...` to create a separate profile that needs the Web UI: it initializes from `@deepseek-ai/dsh-base` only, then fails with `entry "terminal-controller" not found`. Use `--from-default-profile web` for a separate profile.
 - A registry 404 means that version is not published yet — use the source install below.
 
 ```bash
-# verify
-dsh plugin --profile codingns list --depth 0     # -> codingns4dsh <version>
-dsh --profile codingns --dump-config             # expect id: codingns4dsh, terminal-controller disabled
+# optional: verify the installation
+dsh plugin --profile web list --depth 0           # -> codingns4dsh <version>
 
 # upgrade, pin, uninstall (restart DSH afterwards)
-dsh plugin --profile codingns add codingns4dsh@<version>
-dsh plugin --profile codingns remove codingns4dsh
+dsh plugin --profile web add @jingyi0605/codingns4dsh@<version>
+dsh plugin --profile web remove @jingyi0605/codingns4dsh
 ```
 
 **From source** (npm unavailable, or running a checkout):
@@ -201,8 +209,8 @@ dsh plugin --profile codingns remove codingns4dsh
 ```bash
 git clone https://github.com/jingyi0605/Codingns4DSH.git && cd Codingns4DSH
 pnpm install && pnpm build
-dsh codingns --from-default-profile web --dump-config
-dsh plugin --profile codingns add "$PWD"            # or: npm pack, then add ./codingns4dsh-0.1.1.tgz
+dsh plugin --profile web add "$PWD"                # or: npm pack, then add ./jingyi0605-codingns4dsh-0.1.1.tgz
+dsh web
 ```
 
 A directory install links the checkout — rebuild (`pnpm build` / `pnpm dev:watch`) and restart DSH after changes.
@@ -231,7 +239,7 @@ A directory install links the checkout — rebuild (`pnpm build` / `pnpm dev:wat
 
 ## Troubleshooting
 
-- **Versions** — `dsh --version`, `dsh plugin --profile codingns list --depth 0`, `npm view codingns4dsh version`; install and startup both reject DSH outside the supported range.
+- **Versions** — `dsh --version`, `dsh plugin --profile web list --depth 0` (replace `web` for a separate profile), `npm view @jingyi0605/codingns4dsh version`; install and startup both reject DSH outside the supported range.
 - **`patch: entry "terminal-controller" not found`** — the profile lacks the Web app layer; recreate it from the `web` template as shown above.
 - **Agent not detected** — run `<cli> --version` on the Host; ensure its directory is on the `PATH` of the process that started DSH (GUI launchers often differ); log in with the vendor tool, then restart DSH.
 - **Terminal** — persistent mode needs `tmux` on macOS/Linux; enabling/disabling the module and changing the binding scope need a restart; terminals are addressed per workspace.
