@@ -69,6 +69,12 @@ export {
   WORKSPACE_SESSION_ARCHIVE_ATTRIBUTE,
   WORKSPACE_SESSION_ARCHIVE_MODAL_ATTRIBUTE,
 } from './workspace-session-archive-dom.js'
+export {
+  startWorkspaceSessionVisibilityDom,
+  WORKSPACE_SESSION_HIDDEN_ATTRIBUTE,
+  WORKSPACE_SESSION_HIDDEN_MENU_ATTRIBUTE,
+  WORKSPACE_SESSION_HIDDEN_LIST_ATTRIBUTE,
+} from './workspace-session-visibility-dom.js'
 export { CodingNsTerminalView, CodingNsWebTerminals, registerCodingNsTerminalUi } from './terminal/index.js'
 export { registerSubscriptionSlot, registerCommandCodeSubscriptionSlot, CommandCodeSubscriptionSlot } from './subscription-slot.js'
 
@@ -174,13 +180,14 @@ export function apply(ctx?: Context): void {
         })
       }
       const unsubscribe = settings.subscribe(sync)
-      return () => {
+      return async () => {
         unsubscribe()
+        await registry.reconcile([])
         disposeTerminalUi()
-        disposeAccountBar.dispose()
-        void disposeTerminalRemote()
-        void webTerminals.dispose()
-        void settings.dispose?.()
+        await disposeAccountBar.dispose()
+        await disposeTerminalRemote()
+        await webTerminals.dispose()
+        await settings.dispose?.()
       }
     }, 'codingns4dsh: 功能模块启停同步')
 

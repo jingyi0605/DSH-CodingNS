@@ -76,6 +76,10 @@ export interface WorkspaceSessionEnhancementSettings {
   showAdapterLogo: boolean
   /** 是否在每个有归档会话的工作区中显示归档入口。 */
   showArchivedSessions: boolean
+  /** 是否在工作区菜单提供隐藏与恢复工作区入口。 */
+  showWorkspaceHiding: boolean
+  /** 插件本地隐藏的工作区 ID；不改变 DSH 原生工作区数据。 */
+  hiddenWorkspaceIds: string[]
   /** 是否在对话底部显示订阅与上游用量检测。 */
   showSubscriptionUsage: boolean
   /** 是否在输入工具区显示快捷会话入口。 */
@@ -156,6 +160,8 @@ export const DEFAULT_TERMINAL_ENHANCEMENT_SETTINGS: TerminalEnhancementSettings 
 export const DEFAULT_WORKSPACE_SESSION_ENHANCEMENT_SETTINGS: WorkspaceSessionEnhancementSettings = {
   showAdapterLogo: true,
   showArchivedSessions: true,
+  showWorkspaceHiding: true,
+  hiddenWorkspaceIds: [],
   showSubscriptionUsage: true,
   showQuickPhrases: true,
   quickPhrases: DEFAULT_QUICK_PHRASES.map((phrase) => ({ ...phrase })),

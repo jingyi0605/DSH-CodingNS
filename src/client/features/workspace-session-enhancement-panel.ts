@@ -19,7 +19,7 @@ export function WorkspaceSessionEnhancementPanel({ services, enabled, snapshot, 
   const value = snapshot.value?.workspaceSessionEnhancement
     ?? DEFAULT_WORKSPACE_SESSION_ENHANCEMENT_SETTINGS
   const disabled = !enabled || snapshot.status === 'loading' || !snapshot.writable
-  const updateSetting = (field: 'showAdapterLogo' | 'showArchivedSessions' | 'showSubscriptionUsage' | 'showQuickPhrases', nextValue: boolean): void => {
+  const updateSetting = (field: 'showAdapterLogo' | 'showArchivedSessions' | 'showWorkspaceHiding' | 'showSubscriptionUsage' | 'showQuickPhrases', nextValue: boolean): void => {
     void services.settings.mutate([{
       op: 'set',
       path: [CODINGNS_WORKSPACE_SESSION_ENHANCEMENT_FIELD, field],
@@ -54,6 +54,23 @@ export function WorkspaceSessionEnhancementPanel({ services, enabled, snapshot, 
         checked: value.showAdapterLogo,
         disabled,
         onChange: (event: { currentTarget: { checked: boolean } }) => updateSetting('showAdapterLogo', event.currentTarget.checked),
+        style: { flex: '0 0 auto', accentColor: dshThemeColor.accent },
+      }),
+    ),
+    createElement('label', {
+      style: dshSettingsListRowStyle,
+    },
+      createElement('span', { style: { minWidth: 0 } },
+        createElement('strong', { style: { display: 'block', fontSize: 13, lineHeight: 1.4 } }, t('workspace.showWorkspaceHiding')),
+        createElement('span', { style: { display: 'block', marginTop: 3, ...dshSettingsHelpStyle } }, t('workspace.workspaceHidingDescription')),
+      ),
+      createElement('input', {
+        type: 'checkbox',
+        role: 'switch',
+        'aria-label': t('workspace.showWorkspaceHiding'),
+        checked: value.showWorkspaceHiding,
+        disabled,
+        onChange: (event: { currentTarget: { checked: boolean } }) => updateSetting('showWorkspaceHiding', event.currentTarget.checked),
         style: { flex: '0 0 auto', accentColor: dshThemeColor.accent },
       }),
     ),

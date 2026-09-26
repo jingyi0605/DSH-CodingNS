@@ -64,6 +64,8 @@ export const CodingNsSettingsSchema: z<CodingNsSettings> = z.object({
   workspaceSessionEnhancement: z.object({
     showAdapterLogo: z.boolean().default(DEFAULT_CODINGNS_SETTINGS.workspaceSessionEnhancement.showAdapterLogo),
     showArchivedSessions: z.boolean().default(DEFAULT_CODINGNS_SETTINGS.workspaceSessionEnhancement.showArchivedSessions),
+    showWorkspaceHiding: z.boolean().default(DEFAULT_CODINGNS_SETTINGS.workspaceSessionEnhancement.showWorkspaceHiding),
+    hiddenWorkspaceIds: z.array(z.string().min(1).max(512)).default(DEFAULT_CODINGNS_SETTINGS.workspaceSessionEnhancement.hiddenWorkspaceIds),
     showSubscriptionUsage: z.boolean().default(DEFAULT_CODINGNS_SETTINGS.workspaceSessionEnhancement.showSubscriptionUsage),
     showQuickPhrases: z.boolean().default(DEFAULT_CODINGNS_SETTINGS.workspaceSessionEnhancement.showQuickPhrases),
     quickPhrases: z.array(z.object({

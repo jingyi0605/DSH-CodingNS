@@ -6,6 +6,7 @@ import {
 } from '../session-adapter-cache.js'
 import { startWorkspaceSessionLogoDom, type WorkspaceSessionLogoDomController } from '../workspace-session-logo-dom.js'
 import { startWorkspaceSessionArchiveDom, type WorkspaceSessionArchiveDomController } from '../workspace-session-archive-dom.js'
+import { startWorkspaceSessionVisibilityDom, type WorkspaceSessionVisibilityDomController } from '../workspace-session-visibility-dom.js'
 import { WorkspaceSessionEnhancementPanel } from './workspace-session-enhancement-panel.js'
 import type { CodingNsClientFeatureModule } from './types.js'
 import { registerSubscriptionSlot } from '../subscription-slot.js'
@@ -21,7 +22,7 @@ export const workspaceSessionEnhancementFeature: CodingNsClientFeatureModule = {
     runtime: 'client',
     ui: {
       label: '工作区会话增强',
-      description: '在原生工作区会话行显示 Agent Logo、归档入口和订阅/用量信息，并提供本地快捷会话。',
+      description: '在原生工作区会话行显示 Agent Logo、归档入口、工作区隐藏/恢复入口和订阅/用量信息，并提供本地快捷会话。',
       labelKey: 'feature.workspaceSession.label',
       descriptionKey: 'feature.workspaceSession.description',
       order: 35,
@@ -34,6 +35,7 @@ export const workspaceSessionEnhancementFeature: CodingNsClientFeatureModule = {
     let generation = 0
     let logoDom: WorkspaceSessionLogoDomController | undefined
     let archiveDom: WorkspaceSessionArchiveDomController | undefined
+    let visibilityDom: WorkspaceSessionVisibilityDomController | undefined
     let adapterRefreshTimer: ReturnType<typeof globalThis.setInterval> | undefined
     let disposeSubscription: (() => void) | undefined
     let disposeQuickPhrases: (() => void) | undefined
@@ -50,6 +52,27 @@ export const workspaceSessionEnhancementFeature: CodingNsClientFeatureModule = {
     }
     const enableArchive = (): void => {
       if (archiveDom === undefined) archiveDom = startWorkspaceSessionArchiveDom({ remote: context.services.remote })
+    }
+    const enableWorkspaceVisibility = (hiddenWorkspaceIds: readonly string[]): void => {
+      if (visibilityDom === undefined) {
+        visibilityDom = startWorkspaceSessionVisibilityDom({
+          remote: context.services.remote,
+          hiddenWorkspaceIds,
+          onHiddenWorkspaceIdsChange: async (ids) => {
+            await context.services.settings.mutate([{
+              op: 'set',
+              path: ['workspaceSessionEnhancement', 'hiddenWorkspaceIds'],
+              value: [...ids],
+            }])
+          },
+        })
+        return
+      }
+      visibilityDom.setHiddenWorkspaceIds(hiddenWorkspaceIds)
+    }
+    const disableWorkspaceVisibility = (): void => {
+      visibilityDom?.dispose()
+      visibilityDom = undefined
     }
     const enableSubscription = (): void => {
       if (disposeSubscription !== undefined || context.services.slots === undefined) return
@@ -71,6 +94,7 @@ export const workspaceSessionEnhancementFeature: CodingNsClientFeatureModule = {
       disableLogo()
       archiveDom?.dispose()
       archiveDom = undefined
+      disableWorkspaceVisibility()
       disableSubscription()
       disableQuickPhrases()
     }
@@ -102,6 +126,12 @@ export const workspaceSessionEnhancementFeature: CodingNsClientFeatureModule = {
         archiveDom?.dispose()
         archiveDom = undefined
       }
+      const showWorkspaceHiding = workspaceSettings?.showWorkspaceHiding
+        ?? DEFAULT_WORKSPACE_SESSION_ENHANCEMENT_SETTINGS.showWorkspaceHiding
+      const hiddenWorkspaceIds = workspaceSettings?.hiddenWorkspaceIds
+        ?? DEFAULT_WORKSPACE_SESSION_ENHANCEMENT_SETTINGS.hiddenWorkspaceIds
+      if (showWorkspaceHiding) enableWorkspaceVisibility(hiddenWorkspaceIds)
+      else disableWorkspaceVisibility()
       const showAdapterLogo = workspaceSettings?.showAdapterLogo
         ?? DEFAULT_WORKSPACE_SESSION_ENHANCEMENT_SETTINGS.showAdapterLogo
       if (showAdapterLogo) enableLogo()

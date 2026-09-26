@@ -220,9 +220,10 @@ async function loadArchiveSnapshot(remote: CodingNsRemote, now: () => number): P
   return { byWorkspace: result, workspaceIds: workspaces.map((workspace) => workspace.workspaceId) }
 }
 
-interface WorkspaceRecord {
+export interface WorkspaceRecord {
   readonly workspaceId: string
   readonly path?: string
+  readonly title: string
   readonly sessionIds: readonly string[]
   readonly archivedSessionIds: readonly string[]
 }
@@ -234,6 +235,11 @@ interface SessionRecord {
   readonly title: string
   readonly cwd?: string
   readonly workspaceId?: string
+}
+
+/** 读取 DSH 当前工作区基线；隐藏工作区控制器与归档控制器共用这份解析。 */
+export async function loadWorkspaceRecords(remote: unknown): Promise<readonly WorkspaceRecord[]> {
+  return readWorkspaceBaseline(normalizeRemote(remote).workspace)
 }
 
 async function readWorkspaceBaseline(api: RemoteWorkspaceApi | undefined): Promise<WorkspaceRecord[]> {
@@ -251,9 +257,11 @@ async function readWorkspaceBaseline(api: RemoteWorkspaceApi | undefined): Promi
     const workspaceId = readString(record?.workspaceId)
     if (workspaceId === undefined) return []
     const path = readString(record?.path)
+    const title = readString(record?.title) ?? path ?? workspaceId
     return [{
       workspaceId,
       ...(path === undefined ? {} : { path }),
+      title,
       sessionIds: readStringArray(record?.sessionIds),
       archivedSessionIds: globalArchived,
     }]
@@ -302,11 +310,11 @@ function findMoreSessionButtons(dom: Pick<Document, 'querySelectorAll'>): HTMLEl
   return [...dom.querySelectorAll<HTMLElement>('button')].filter(isMoreSessionButton)
 }
 
-function findWorkspaceHeaders(dom: Pick<Document, 'querySelectorAll'>): HTMLElement[] {
+export function findWorkspaceHeaders(dom: Pick<Document, 'querySelectorAll'>): HTMLElement[] {
   return [...dom.querySelectorAll<HTMLElement>('[role="treeitem"][aria-expanded]')]
 }
 
-function resolveWorkspaceId(element: Element): string | undefined {
+export function resolveWorkspaceId(element: Element): string | undefined {
   let current: Element | null = element
   for (let depth = 0; depth < 8 && current !== null; depth += 1) {
     for (const key of ['data-workspace-id', 'data-workspaceid', 'data-workspace']) {
@@ -389,7 +397,7 @@ function insertArchiveEntryAfterHeader(
   return true
 }
 
-function findWorkspaceContainer(anchor: HTMLElement, workspaceId: string): HTMLElement | null {
+export function findWorkspaceContainer(anchor: HTMLElement, workspaceId: string): HTMLElement | null {
   let current = anchor.parentElement
   let fallback: HTMLElement | null = null
   for (let depth = 0; depth < 8 && current !== null; depth += 1) {
