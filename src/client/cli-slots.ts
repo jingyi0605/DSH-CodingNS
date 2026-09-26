@@ -24,8 +24,8 @@ type SessionSelector = <Selected>(selector: (session: SessionSnapshot) => Select
 /** DSH Web 当前版本的对话工具栏 Slot 契约。Slot 包没有预声明这些业务名称，插件在此补齐类型。 */
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
+    'conversation.input.left': { kind: 'list'; scope: 'session' }
     'conversation.input.right': { kind: 'list'; scope: 'session' }
-    'conversation.input.overlay': { kind: 'list'; scope: 'session' }
   }
   interface SessionStandardProps {
     sessionId: string

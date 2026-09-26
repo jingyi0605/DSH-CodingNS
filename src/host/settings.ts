@@ -70,6 +70,8 @@ export const CodingNsSettingsSchema: z<CodingNsSettings> = z.object({
       id: z.string().min(1).max(128),
       text: z.string().min(1).max(4000),
     })).default(DEFAULT_CODINGNS_SETTINGS.workspaceSessionEnhancement.quickPhrases),
+    // 缺少该字段说明是旧配置；Client 首次加载时会补齐内置快捷会话。
+    quickPhrasesSeeded: z.boolean().default(false),
   }).default(DEFAULT_CODINGNS_SETTINGS.workspaceSessionEnhancement),
 })
 

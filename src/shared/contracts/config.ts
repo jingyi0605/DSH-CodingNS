@@ -78,10 +78,12 @@ export interface WorkspaceSessionEnhancementSettings {
   showArchivedSessions: boolean
   /** 是否在对话底部显示订阅与上游用量检测。 */
   showSubscriptionUsage: boolean
-  /** 是否在发送按钮上方显示快捷会话入口。 */
+  /** 是否在输入工具区显示快捷会话入口。 */
   showQuickPhrases: boolean
   /** 插件本地保存的快捷会话条目。 */
   quickPhrases: QuickPhrase[]
+  /** 内置快捷会话是否已经完成首次初始化；仅用于兼容旧配置。 */
+  quickPhrasesSeeded: boolean
 }
 
 /** 可复用的快捷会话文本。 */
@@ -89,6 +91,14 @@ export interface QuickPhrase {
   id: string
   text: string
 }
+
+/** 首次启用快捷会话时提供的内置指令。 */
+export const DEFAULT_QUICK_PHRASES: QuickPhrase[] = [
+  { id: 'builtin-quick-1', text: '请将本次会话变更的所有代码提交到git暂存区，然后总结一条中文的提交信息' },
+  { id: 'builtin-quick-2', text: '分析本项目模块的代码实现，并分析存在的问题' },
+  { id: 'builtin-quick-3', text: '分析当前项目中的未提交文件，按照功能模块进行分类提交，提交信息格式请参考我最近的提交记录' },
+  { id: 'builtin-quick-4', text: '请给出完整的开发提示词，我将在新的页面中继续开发' },
+]
 
 /** 局域网访问 DSH 的持久化配置；dshPort 为 0 表示启动时自动探测。 */
 export interface LanAccessDshSettings {
@@ -148,7 +158,8 @@ export const DEFAULT_WORKSPACE_SESSION_ENHANCEMENT_SETTINGS: WorkspaceSessionEnh
   showArchivedSessions: true,
   showSubscriptionUsage: true,
   showQuickPhrases: true,
-  quickPhrases: [],
+  quickPhrases: DEFAULT_QUICK_PHRASES.map((phrase) => ({ ...phrase })),
+  quickPhrasesSeeded: true,
 }
 export const DEFAULT_CODINGNS_SETTINGS: CodingNsSettings = {
   controlBaseUrl: DEFAULT_CODINGNS_CONTROL_BASE_URL,
