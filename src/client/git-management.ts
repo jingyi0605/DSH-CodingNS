@@ -43,6 +43,13 @@ interface GitSidebarRuntime {
   readonly registerCloseHandler?: (kind: string, handler: (sessionId: string, tab: GitSidebarTab) => void) => () => void
 }
 
+interface GitPanelCache {
+  readonly status: GitStatus
+  readonly history: readonly GitHistoryItem[]
+  readonly historyTotalCount: number
+  readonly branches: GitBranchSnapshot | null
+}
+
 interface GitWorkspaceRecoveryProps extends PropsRuntime<'shell.overlay'> {
   readonly remote?: unknown
   readonly sidebarRight: GitSidebarRuntime
@@ -154,18 +161,19 @@ function GitPanel(props: GitTabProps): ReactElement {
     setWorkspaceId(undefined)
     setStatus(null)
     setHistory([])
+    setHistoryTotalCount(0)
     historyExpanded.current = false
     setBranches(null)
     setDiffView(null)
     const load = async (resolvedWorkspaceId: string): Promise<void> => {
       const cached = readCache(resolvedWorkspaceId)
       // 已经手动展开历史后，定时刷新只能更新状态和分支，不能用首屏缓存覆盖已加载的分页。
-      if (cached !== null && !historyExpanded.current) { setStatus(cached.status); setHistory(cached.history); setHistoryTotalCount(cached.history.length); setBranches(cached.branches) }
+      if (cached !== null && !historyExpanded.current) { setStatus(cached.status); setHistory(cached.history); setHistoryTotalCount(cached.historyTotalCount); setBranches(cached.branches) }
       try {
         const nextStatus = await call<GitStatus>(props.rpc, 'git/status', { workspaceId: resolvedWorkspaceId })
         if (disposed) return
         if (nextStatus.snapshot.enabled === false) {
-          setStatus(nextStatus); setHistory([]); setHistoryTotalCount(0); setBranches(null); writeCache(resolvedWorkspaceId, { status: nextStatus, history: [], branches: null }); setToast(null)
+          setStatus(nextStatus); setHistory([]); setHistoryTotalCount(0); setBranches(null); writeCache(resolvedWorkspaceId, { status: nextStatus, history: [], historyTotalCount: 0, branches: null }); setToast(null)
           return
         }
         const [nextHistory, nextBranches] = await Promise.all([
@@ -174,7 +182,7 @@ function GitPanel(props: GitTabProps): ReactElement {
         ])
         if (disposed) return
         const normalizedBranches = normalizeBranchSnapshot(nextBranches)
-        if (nextHistory !== null) { setHistory(nextHistory.items); setHistoryTotalCount(nextHistory.totalCount); writeCache(resolvedWorkspaceId, { status: nextStatus, history: nextHistory.items, branches: normalizedBranches }) }
+        if (nextHistory !== null) { setHistory(nextHistory.items); setHistoryTotalCount(nextHistory.totalCount); writeCache(resolvedWorkspaceId, { status: nextStatus, history: nextHistory.items, historyTotalCount: nextHistory.totalCount, branches: normalizedBranches }) }
         setStatus(nextStatus); setBranches(normalizedBranches)
         setToast(null)
       } catch (error) {
@@ -222,10 +230,10 @@ function GitPanel(props: GitTabProps): ReactElement {
           call<GitBranchSnapshot>(props.rpc, 'git/branches', { workspaceId: targetWorkspaceId }),
         ])
         const normalizedBranches = normalizeBranchSnapshot(nextBranches)
-        if (nextHistory !== null) { setHistory(nextHistory.items); setHistoryTotalCount(nextHistory.totalCount); writeCache(targetWorkspaceId, { status: nextStatus, history: nextHistory.items, branches: normalizedBranches }) }
+        if (nextHistory !== null) { setHistory(nextHistory.items); setHistoryTotalCount(nextHistory.totalCount); writeCache(targetWorkspaceId, { status: nextStatus, history: nextHistory.items, historyTotalCount: nextHistory.totalCount, branches: normalizedBranches }) }
         setBranches(normalizedBranches)
       } else {
-        setHistory([]); setHistoryTotalCount(0); setBranches(null); writeCache(targetWorkspaceId, { status: nextStatus, history: [], branches: null })
+        setHistory([]); setHistoryTotalCount(0); setBranches(null); writeCache(targetWorkspaceId, { status: nextStatus, history: [], historyTotalCount: 0, branches: null })
       }
       notify('success', '操作已完成')
     }
@@ -285,7 +293,7 @@ function GitPanel(props: GitTabProps): ReactElement {
       createElement('div', { style: mutedStyle }, '初始化后即可查看改动、提交和版本历史。'),
       createElement('button', { type: 'button', disabled: busy, onClick: () => void run('git/init', {}), style: primaryButtonStyle }, '初始化 Git'),
     ) : null,
-    status !== null ? createElement('div', { style: summaryStyle }, `${staged.length} 个已暂存 · ${unstaged.length} 个未暂存 · ${history.length}${history.length < historyTotalCount ? `/${historyTotalCount}` : ''} 条提交`) : null,
+    status !== null ? createElement('div', { style: summaryStyle }, `${staged.length} 个已暂存 · ${unstaged.length} 个未暂存 · ${historyTotalCount} 条提交`) : null,
     diffView !== null ? createElement(DiffViewer, { diff: diffView, onClose: () => setDiffView(null) }) : null,
     status !== null && status.snapshot.enabled !== false ? createElement('div', { style: contentGridStyle },
       createElement('div', { style: columnStyle },
@@ -458,7 +466,7 @@ function HistorySection({ history, totalCount, hasMore, loadingMore, onLoadMore,
     ),
   ))
   return createElement('section', { style: sectionStyle },
-    createElement('div', { style: sectionHeaderStyle }, createElement('strong', undefined, `Git 版本 (${history.length}${hasMore ? `/${totalCount}` : ''})`), branches === null ? null : createElement('select', { value: branches.currentBranch, disabled: busy, onChange: (event: { currentTarget: { value: string } }) => onSwitch(event.currentTarget.value), style: branchSelectStyle }, ...branches.local.map((branch) => createElement('option', { key: branch.name, value: branch.name }, branch.name)))),
+    createElement('div', { style: sectionHeaderStyle }, createElement('strong', undefined, `Git 版本 (${totalCount})`), branches === null ? null : createElement('select', { value: branches.currentBranch, disabled: busy, onChange: (event: { currentTarget: { value: string } }) => onSwitch(event.currentTarget.value), style: branchSelectStyle }, ...branches.local.map((branch) => createElement('option', { key: branch.name, value: branch.name }, branch.name)))),
     history.length === 0 ? createElement('div', { style: mutedStyle }, '暂无提交') : rows,
     hasMore ? createElement('button', { type: 'button', disabled: busy || loadingMore, onClick: onLoadMore, style: loadMoreButtonStyle }, loadingMore ? '正在加载…' : '查看更多版本（每次 100 条）') : null,
   )
@@ -709,8 +717,8 @@ function unwrapRemoteValue(value: unknown): unknown {
   return record.ok ? record.value : undefined
 }
 function cacheKey(workspaceId: string): string { return `codingns4dsh.git.${workspaceId}` }
-function readCache(workspaceId: string): { status: GitStatus; history: readonly GitHistoryItem[]; branches: GitBranchSnapshot | null } | null { try { const value = JSON.parse(localStorage.getItem(cacheKey(workspaceId)) ?? 'null') as { status?: GitStatus; history?: readonly GitHistoryItem[]; branches?: GitBranchSnapshot | null } | null; return value?.status ? { status: value.status, history: value.history ?? [], branches: normalizeBranchSnapshot(value.branches ?? null) } : null } catch { return null } }
-function writeCache(workspaceId: string, value: { status: GitStatus; history: readonly GitHistoryItem[]; branches: GitBranchSnapshot | null }): void { try { localStorage.setItem(cacheKey(workspaceId), JSON.stringify(value)) } catch { /* 浏览器禁用存储时仅失去缓存 */ } }
+function readCache(workspaceId: string): GitPanelCache | null { try { const value = JSON.parse(localStorage.getItem(cacheKey(workspaceId)) ?? 'null') as { status?: GitStatus; history?: readonly GitHistoryItem[]; historyTotalCount?: number; branches?: GitBranchSnapshot | null } | null; if (!value?.status || typeof value.historyTotalCount !== 'number') return null; return { status: value.status, history: value.history ?? [], historyTotalCount: value.historyTotalCount, branches: normalizeBranchSnapshot(value.branches ?? null) } } catch { return null } }
+function writeCache(workspaceId: string, value: GitPanelCache): void { try { localStorage.setItem(cacheKey(workspaceId), JSON.stringify(value)) } catch { /* 浏览器禁用存储时仅失去缓存 */ } }
 function normalizeBranchSnapshot(value: GitBranchSnapshot | null): GitBranchSnapshot | null {
   if (value === null) return null
   const normalize = (item: GitBranchSnapshot['local'][number], fallbackRemote: boolean): GitBranchSnapshot['local'][number] | null => {
