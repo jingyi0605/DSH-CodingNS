@@ -45,7 +45,7 @@ export type {
   LanAccessCrypto,
   LanAccessGlobal,
 } from './lan-access.js'
-export { CLIENT_FEATURES, settingsModules, startBrowserRelayConnection } from './features/index.js'
+export { CLIENT_FEATURES, settingsModules, startBrowserRelayConnection, gitManagementFeature } from './features/index.js'
 export { chooseDshDevice, createHttpDshH5ControlApi, startDshH5Bootstrap, startDshH5BrowserBootstrap } from './dsh-h5-bootstrap.js'
 export type {
   DshH5BootstrapOptions,

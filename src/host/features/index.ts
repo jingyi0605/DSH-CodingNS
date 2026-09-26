@@ -6,6 +6,7 @@ import { createCliAdaptersFeature } from '../cli-adapters/feature.js'
 import { createTerminalProcessFeature } from './terminal-process.js'
 import { createDebugFeature } from './debug.js'
 import { createHostStatusFeature } from './host-status.js'
+import { createGitManagementFeature } from './git-management.js'
 import type { CodingNsHostServices } from './types.js'
 
 export interface HostFeatureOptions {
@@ -22,6 +23,7 @@ export function createHostFeatures(options: HostFeatureOptions = {}): readonly F
     createTerminalProcessFeature(),
     createDebugFeature(),
     createHostStatusFeature(),
+    createGitManagementFeature(),
   ]
 }
 
@@ -35,4 +37,5 @@ export { createCliAdaptersFeature } from '../cli-adapters/feature.js'
 export { createTerminalProcessFeature } from './terminal-process.js'
 export { createDebugFeature } from './debug.js'
 export { createHostStatusFeature } from './host-status.js'
+export { createGitManagementFeature } from './git-management.js'
 export type { CodingNsHostServices } from './types.js'
