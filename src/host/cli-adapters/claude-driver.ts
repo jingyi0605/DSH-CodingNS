@@ -3,21 +3,35 @@ import { basename, join } from 'node:path'
 import type { CodingNsAgentEvent, CodingNsCliTurnInput } from '../../shared/contracts/cli-adapter.js'
 import type { CodingNsCliSessionProbeInput, CodingNsCliSessionProbeResult } from './driver.js'
 import { StandardStreamDriver, emptyCatalog, type StandardStreamDriverOptions } from './standard-stream-driver.js'
-import { CLAUDE_CATALOG, enrichEfforts, isProviderDefaultModel } from './model-catalog.js'
+import { CLAUDE_CATALOG, isProviderDefaultModel } from './model-catalog.js'
+import { discoverClaudeModelCatalog } from './claude-model-options.js'
 import { probeStoredSession, readFirstJsonRecord } from './session-probe.js'
 import { firstToolText, isToolRecord, serializeToolValue } from './tool-observation.js'
 
 export class ClaudeCodeDriver extends StandardStreamDriver {
   private readonly sessionRoots: readonly string[]
+  private readonly claudeConfigDir: string | undefined
+  private readonly discoveryFetch: typeof fetch | undefined
 
   constructor(options: StandardStreamDriverOptions = {}) {
     super({ id: 'claude-code', name: 'Claude Code', protocol: 'stream-json', capabilities: ['models', 'stream', 'resume', 'interrupt', 'tool-events', 'reasoning', 'usage'] }, { binaries: ['claude'] }, options)
     this.sessionRoots = options.sessionRoots ?? [join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude'), 'projects')]
+    this.claudeConfigDir = options.claudeConfigDir
+    this.discoveryFetch = options.fetch
   }
   async listModels() {
-    if (!(await this.detect()).installed) return emptyCatalog()
-    const catalog = await super.listModels()
-    return catalog.groups.length > 0 ? enrichEfforts(catalog, CLAUDE_CATALOG) : CLAUDE_CATALOG
+    const detected = await this.detect()
+    if (!detected.installed || detected.command === null) return emptyCatalog()
+    try {
+      return await discoverClaudeModelCatalog({
+        command: detected.command,
+        spawn: this.runSpawn,
+        ...(this.discoveryFetch ? { fetch: this.discoveryFetch } : {}),
+        ...(this.claudeConfigDir ? { configDir: this.claudeConfigDir } : {}),
+      })
+    } catch {
+      return CLAUDE_CATALOG
+    }
   }
   async probeSession(input: CodingNsCliSessionProbeInput): Promise<CodingNsCliSessionProbeResult> {
     return probeStoredSession(input, {

@@ -21,6 +21,9 @@ export interface StandardStreamDriverOptions {
   readonly spawn?: typeof spawn
   readonly versionArgs?: readonly string[]
   readonly modelArgs?: readonly string[]
+  /** Claude 模型发现的配置目录和网络请求注入点。 */
+  readonly claudeConfigDir?: string
+  readonly fetch?: typeof fetch
 }
 
 /**
