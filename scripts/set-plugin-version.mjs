@@ -24,7 +24,8 @@ await writeJson('package.json', manifest)
 
 const profile = await readJson('profile/package.json')
 profile.version = nextVersion
-profile.dependencies['codingns4dsh'] = nextVersion
+delete profile.dependencies.codingns4dsh
+profile.dependencies['@jingyi0605/codingns4dsh'] = nextVersion
 await writeJson('profile/package.json', profile)
 const profileVersion = await readJson('profile/version.json')
 profileVersion.pluginVersion = nextVersion
@@ -41,7 +42,7 @@ for (const relativePath of ['README.md', 'README.en.md', 'profile/README.md']) {
   const document = await readFile(documentPath, 'utf8')
   if (typeof previousVersion === 'string' && previousVersion !== nextVersion) {
     const updatedDocument = document
-      .replaceAll(`codingns4dsh@${previousVersion}`, `codingns4dsh@${nextVersion}`)
+      .replaceAll(`@jingyi0605/codingns4dsh@${previousVersion}`, `@jingyi0605/codingns4dsh@${nextVersion}`)
       .replaceAll(`v${previousVersion}`, `v${nextVersion}`)
       .replaceAll(`插件版本为 \`${previousVersion}\``, `插件版本为 \`${nextVersion}\``)
       .replaceAll(`当前插件版本为 \`${previousVersion}\``, `当前插件版本为 \`${nextVersion}\``)

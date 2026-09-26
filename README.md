@@ -4,15 +4,15 @@
 
 **把外部 Agent CLI、持久终端、工作区调试和远程访问，装进 DSH 原生界面。**
 
-[![npm version](https://img.shields.io/npm/v/codingns4dsh?logo=npm)](https://www.npmjs.com/package/codingns4dsh)
+[![npm version](https://img.shields.io/npm/v/%40jingyi0605%2Fcodingns4dsh?logo=npm)](https://www.npmjs.com/package/@jingyi0605/codingns4dsh)
 [![DSH compatibility](https://img.shields.io/badge/DSH-%3E%3D0.1.5--rc.3%20%3C0.1.8--0-4D6BFE)](https://github.com/deepseek-ai/deepseek-harness)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.19-3C873A?logo=node.js&logoColor=white)](https://nodejs.org)
 
 **简体中文** · [English](README.en.md)
 
-**当前版本 `codingns4dsh@0.1.1`** · DSH **`>=0.1.5-rc.3 <0.1.8-0`**（已验证 `0.1.5-rc.3`、`0.1.6-alpha.2`、`0.1.7-rc.2`）· Node **`>= 22.19`** · macOS / Linux / Windows
+**当前版本 `@jingyi0605/codingns4dsh@0.1.1`** · DSH **`>=0.1.5-rc.3 <0.1.8-0`**（已验证 `0.1.5-rc.3`、`0.1.6-alpha.2`、`0.1.7-rc.2`）· Node **`>= 22.19`** · macOS / Linux / Windows
 
-**[GitHub](https://github.com/jingyi0605/Codingns4DSH)** · **[npm](https://www.npmjs.com/package/codingns4dsh)** · **QQ 群 1092985965**
+**[GitHub](https://github.com/jingyi0605/Codingns4DSH)** · **[npm](https://www.npmjs.com/package/@jingyi0605/codingns4dsh)** · **QQ 群 1092985965**
 
 <p>
   <a href="#界面预览">界面预览</a> ·
@@ -44,7 +44,7 @@
 
 **Codingns4DSH 是一个 DSH 插件 Bundle**（Host 层 + 浏览器层），提供八个模块，全部在 **设置 → Codingns4DSH** 中配置。
 
-> 名称说明：本插件名为 **Codingns4DSH**（npm 包 `codingns4dsh`，设置页入口显示为 Codingns4DSH）；文中单独出现的 **Codingns4DSH** 指提供 Control API、账号与中继隧道的平台服务。
+> 名称说明：本插件名为 **Codingns4DSH**（npm 包 `@jingyi0605/codingns4dsh`，设置页入口显示为 Codingns4DSH）；文中单独出现的 **Codingns4DSH** 指提供 Control API、账号与中继隧道的平台服务。
 
 | 模块 | 作用 | 默认 |
 | --- | --- | :---: |

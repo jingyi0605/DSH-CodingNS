@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-# 本脚本只负责当前仓库根目录下的 codingns4dsh 包。
+# 本脚本只负责当前仓库根目录下的 @jingyi0605/codingns4dsh 包。
 # 发布前会重新构建并执行检查，避免把过期的 data/build 产物发布出去。
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmjs.org/}"
