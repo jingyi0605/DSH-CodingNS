@@ -16,7 +16,7 @@ test('终端 Typert manifest 使用 codingns4dsh 自有 package 和 invocation i
     expectedMethods.map((method) => `codingns4dsh#terminal/${method}`),
   )
   assert.ok(TYPERT.invocations.every((item) => item.service === 'terminalController'))
-  assert.ok(TYPERT.invocations.every((item) => item.namespace === 'terminal'))
+  assert.ok(TYPERT.invocations.every((item) => item.namespace === 'codingnsTerminal'))
 })
 
 test('终端 Typert manifest 保持官方 lookup、scope、stream 和 cancellation 形状', () => {

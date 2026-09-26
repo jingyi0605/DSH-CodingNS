@@ -9,6 +9,7 @@ import type {
   WebTerminalId,
 } from '../../shared/contracts/terminal.js'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import { debugInfo, debugWarn } from '../../shared/debug.js'
 
 export type { TerminalAttachmentId, WebTerminalId } from '../../shared/contracts/terminal.js'
 export type TerminalEnvironment = CodingNsTerminalEnvironment
@@ -186,9 +187,11 @@ export class CodingNsTerminalView {
 
   async close(): Promise<void> {
     if (this.store.getSnapshot().phase === 'closed') return
+    debugInfo('codingns4dsh: client terminal close entered', { sessionId: this.sessionId, terminalId: this.id })
     this.patch({ phase: 'closing', writable: false })
     this.detach()
     unwrap(await resolveRemote(this.remote).close(this.sessionId, this.id))
+    debugInfo('codingns4dsh: client terminal close success', { sessionId: this.sessionId, terminalId: this.id })
     this.patch({ phase: 'closed', writable: false })
   }
 
@@ -203,9 +206,11 @@ export class CodingNsTerminalView {
     try {
       const remote = resolveRemote(this.remote)
       const environment = unwrap(await remote.environment(this.sessionId, this.lifetime.signal))
+      debugInfo('codingns4dsh: client terminal environment', { sessionId: this.sessionId, workspaceId: environment.workspaceId, cwd: environment.cwd })
       let createWhenMissing = this.createWhenMissing
       if (environment.workspaceId !== undefined) {
         const binding = this.onWorkspaceResolved?.(environment.workspaceId, this.id)
+        debugInfo('codingns4dsh: client terminal workspace binding', { sessionId: this.sessionId, workspaceId: environment.workspaceId, requestedId: this.id, binding: binding ?? null })
         if (binding !== undefined) {
           if (binding.id !== this.id) this.id = binding.id
           // 工作区已有绑定时，恢复必须失败闭合，不能用新 ID 偷建替代终端。
@@ -213,6 +218,7 @@ export class CodingNsTerminalView {
         }
       }
       const listed = unwrap(await remote.list(this.sessionId))
+      debugInfo('codingns4dsh: client terminal list', { sessionId: this.sessionId, workspaceId: environment.workspaceId, terminalIds: listed.map((entry) => entry.id), requestedId: this.id, createWhenMissing })
       let info = listed.find((entry) => entry.id === this.id)
       if (info === undefined && createWhenMissing) {
         this.patch({ phase: 'creating', environment })
@@ -222,6 +228,7 @@ export class CodingNsTerminalView {
           cols: Math.min(80, environment.maxCols),
           rows: Math.min(24, environment.maxRows),
         }, this.lifetime.signal))
+        debugInfo('codingns4dsh: client terminal created', { sessionId: this.sessionId, workspaceId: environment.workspaceId, terminalId: info.id })
       }
       if (info === undefined) throw new Error('Host 中不存在该终端，且恢复流程禁止自动创建替代进程')
       this.patch({ environment, info, title: info.title })
@@ -319,11 +326,13 @@ export class CodingNsWebTerminals extends Service {
   private readonly closeFailureStore = new ObservableValue<readonly TerminalCloseFailure[]>([])
   readonly closeFailures: TerminalObservable<readonly TerminalCloseFailure[]> = this.closeFailureStore
   private readonly closeRequests = new Map<string, CloseRequest>()
+  /** Remote 注入前不能执行关闭请求；就绪后统一冲刷，避免把启动竞态显示成永久错误。 */
+  private cleanupQueued = false
 
   constructor(ctx: Context, private readonly remote: TerminalRemoteSource) {
     super(ctx, 'webTerminals')
     for (const request of readCloseRequests()) this.closeRequests.set(String(request.id), request)
-    for (const request of this.closeRequests.values()) void this.cleanup(request)
+    void this.flushCleanup()
   }
 
   view(sessionId: string, key: string, contentId: string, terminalId?: WebTerminalId, shellPath?: string): CodingNsTerminalView {
@@ -332,9 +341,10 @@ export class CodingNsWebTerminals extends Service {
     if (existing !== undefined) return existing.view
     const workspaceId = this.workspaceIds.get(sessionId)
     const saved = terminalId
-      ?? (workspaceId === undefined ? undefined : readWorkspaceBinding(workspaceId, contentId))
+      ?? (workspaceId === undefined ? undefined : readWorkspaceBindingWithMigration(workspaceId, contentId))
       ?? readBinding(sessionId, contentId)
     const id = saved ?? crypto.randomUUID() as WebTerminalId
+    debugInfo('codingns4dsh: client terminal view', { sessionId, key, contentId, workspaceId: workspaceId ?? null, savedId: saved ?? null, terminalId: id, bindingSource: terminalId !== undefined ? 'argument' : workspaceId !== undefined && readWorkspaceBindingWithMigration(workspaceId, contentId) !== undefined ? 'workspace-storage' : readBinding(sessionId, contentId) !== undefined ? 'session-storage' : 'new' })
     if (saved === undefined) writeBinding(sessionId, contentId, id)
     const view = new CodingNsTerminalView(
       sessionId,
@@ -351,7 +361,7 @@ export class CodingNsWebTerminals extends Service {
   /** 返回某个 Sidebar 内容已经保存的 Host 终端身份，用于恢复时去重。 */
   boundTerminalId(sessionId: string, contentId: string): WebTerminalId | undefined {
     const workspaceId = this.workspaceIds.get(sessionId)
-    return (workspaceId === undefined ? undefined : readWorkspaceBinding(workspaceId, contentId))
+    return (workspaceId === undefined ? undefined : readWorkspaceBindingWithMigration(workspaceId, contentId))
       ?? readBinding(sessionId, contentId)
   }
 
@@ -371,12 +381,16 @@ export class CodingNsWebTerminals extends Service {
     const record = this.views.get(mapKey)
     const id = terminalId ?? record?.view.id ?? this.boundTerminalId(sessionId, contentId)
     if (id === undefined) return
+    debugInfo('codingns4dsh: client terminal close request', { sessionId, key, contentId, workspaceId: this.workspaceIds.get(sessionId) ?? null, terminalId: id, hasView: record !== undefined })
     const request: CloseRequest = { sessionId, id, title: record?.view.state.getSnapshot().title ?? '终端' }
     this.closeRequests.set(String(id), request)
     persistCloseRequests(this.closeRequests.values())
     deleteBinding(sessionId, contentId)
     const workspaceId = this.workspaceIds.get(sessionId)
-    if (workspaceId !== undefined) deleteWorkspaceBinding(workspaceId, contentId)
+    if (workspaceId !== undefined) {
+      deleteWorkspaceBinding(workspaceId)
+      deleteLegacyWorkspaceBinding(workspaceId, contentId)
+    }
     this.views.delete(mapKey)
     void this.cleanup(request, record?.view)
   }
@@ -388,7 +402,9 @@ export class CodingNsWebTerminals extends Service {
     const recovery = (async () => {
       const environment = unwrap(await resolveRemote(this.remote).environment(sessionId))
       if (environment.workspaceId !== undefined) this.workspaceIds.set(sessionId, environment.workspaceId)
-      return unwrap(await resolveRemote(this.remote).list(sessionId))
+      const result = unwrap(await resolveRemote(this.remote).list(sessionId))
+      debugInfo('codingns4dsh: client terminal recover', { sessionId, workspaceId: environment.workspaceId, terminalIds: result.map((entry) => entry.id) })
+      return result
     })().finally(() => this.recoveries.delete(sessionId))
     this.recoveries.set(sessionId, recovery)
     return recovery
@@ -397,6 +413,12 @@ export class CodingNsWebTerminals extends Service {
   retryClose(id: WebTerminalId): void {
     const request = this.closeRequests.get(String(id))
     if (request !== undefined) void this.cleanup(request)
+  }
+
+  /** 由 Client 的 Remote 注入回调调用，完成启动阶段延迟的关闭请求。 */
+  remoteReady(): void {
+    debugInfo('codingns4dsh: client terminal remote ready notification')
+    void this.flushCleanup()
   }
 
   async dispose(): Promise<void> {
@@ -408,24 +430,52 @@ export class CodingNsWebTerminals extends Service {
 
   private rememberWorkspace(sessionId: string, contentId: string, id: WebTerminalId, workspaceId: string): WorkspaceBindingResolution {
     this.workspaceIds.set(sessionId, workspaceId)
-    const existing = readWorkspaceBinding(workspaceId, contentId)
+    const existing = readWorkspaceBindingWithMigration(workspaceId, contentId)
     const resolvedId = existing ?? id
     // 修正首次渲染时已经写入的会话键，避免第二个会话继续携带临时 ID。
     writeBinding(sessionId, contentId, resolvedId)
-    if (existing === undefined) writeWorkspaceBinding(workspaceId, contentId, id)
+    // 旧版本的工作区键带 contentId；统一重写成只含 Workspace ID 的新键。
+    writeWorkspaceBinding(workspaceId, contentId, resolvedId)
+    deleteLegacyWorkspaceBinding(workspaceId, contentId)
     return { id: resolvedId, existing: existing !== undefined }
   }
 
   private async cleanup(request: CloseRequest, view?: CodingNsTerminalView): Promise<void> {
     try {
+      debugInfo('codingns4dsh: client terminal cleanup begin', { sessionId: request.sessionId, terminalId: request.id, hasView: view !== undefined })
       if (view === undefined) unwrap(await resolveRemote(this.remote).close(request.sessionId, request.id))
       else await view.close()
+      debugInfo('codingns4dsh: client terminal cleanup success', { sessionId: request.sessionId, terminalId: request.id })
       this.closeRequests.delete(String(request.id))
       persistCloseRequests(this.closeRequests.values())
       this.closeFailureStore.set(this.closeFailureStore.getSnapshot().filter((item) => item.id !== request.id))
     } catch (error) {
+      if (isTerminalRemoteUnavailable(error)) {
+        debugInfo('codingns4dsh: client terminal cleanup deferred', { sessionId: request.sessionId, terminalId: request.id })
+        return
+      }
+      debugWarn('codingns4dsh: client terminal cleanup failed', { sessionId: request.sessionId, terminalId: request.id, error: errorMessage(error) })
       const failure: TerminalCloseFailure = { ...request, message: errorMessage(error) }
       this.closeFailureStore.set([...this.closeFailureStore.getSnapshot().filter((item) => item.id !== request.id), failure])
+    }
+  }
+
+  private async flushCleanup(): Promise<void> {
+    if (this.cleanupQueued || this.closeRequests.size === 0) return
+    try {
+      resolveRemote(this.remote)
+    } catch (error) {
+      if (isTerminalRemoteUnavailable(error)) {
+        debugInfo('codingns4dsh: client terminal cleanup waiting for remote')
+        return
+      }
+      throw error
+    }
+    this.cleanupQueued = true
+    try {
+      for (const request of [...this.closeRequests.values()]) await this.cleanup(request)
+    } finally {
+      this.cleanupQueued = false
     }
   }
 }
@@ -455,11 +505,22 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function isTerminalRemoteUnavailable(error: unknown): boolean {
+  return errorMessage(error) === '终端服务尚未就绪，请稍后重试'
+}
+
 function bindingKey(sessionId: string, contentId: string): string {
   return `${BINDING_PREFIX}${JSON.stringify([sessionId, contentId])}`
 }
 
-function workspaceBindingKey(workspaceId: string, contentId: string): string {
+function workspaceBindingKey(workspaceId: string): string {
+  // 工作区模式的终端身份不能带 session、tab 或 contentId；这些值在每个
+  // DSH 会话中都会重新生成，带进去就会把所谓的工作区绑定重新拆回会话绑定。
+  return `${BINDING_PREFIX}${JSON.stringify(['workspace', workspaceId])}`
+}
+
+/** 0.1.7 早期构建把 contentId 写进了工作区键，读取它只用于一次迁移。 */
+function legacyWorkspaceBindingKey(workspaceId: string, contentId: string): string {
   return `${BINDING_PREFIX}${JSON.stringify(['workspace', workspaceId, contentId])}`
 }
 
@@ -472,17 +533,28 @@ function writeBinding(sessionId: string, contentId: string, id: WebTerminalId): 
   writeString(bindingKey(sessionId, contentId), String(id))
 }
 
-function readWorkspaceBinding(workspaceId: string, contentId: string): WebTerminalId | undefined {
-  const value = readString(workspaceBindingKey(workspaceId, contentId))
+function readWorkspaceBinding(workspaceId: string, _contentId?: string): WebTerminalId | undefined {
+  const value = readString(workspaceBindingKey(workspaceId))
   return value !== null && /^[\w-]{1,128}$/u.test(value) ? value as WebTerminalId : undefined
 }
 
-function writeWorkspaceBinding(workspaceId: string, contentId: string, id: WebTerminalId): void {
-  writeString(workspaceBindingKey(workspaceId, contentId), String(id))
+function readWorkspaceBindingWithMigration(workspaceId: string, contentId: string): WebTerminalId | undefined {
+  const current = readWorkspaceBinding(workspaceId)
+  if (current !== undefined) return current
+  const legacy = readString(legacyWorkspaceBindingKey(workspaceId, contentId))
+  return legacy !== null && /^[\w-]{1,128}$/u.test(legacy) ? legacy as WebTerminalId : undefined
 }
 
-function deleteWorkspaceBinding(workspaceId: string, contentId: string): void {
-  try { localStorage.removeItem(workspaceBindingKey(workspaceId, contentId)) } catch { /* 浏览器禁用存储时仅失去跨刷新绑定。 */ }
+function writeWorkspaceBinding(workspaceId: string, _contentId: string, id: WebTerminalId): void {
+  writeString(workspaceBindingKey(workspaceId), String(id))
+}
+
+function deleteWorkspaceBinding(workspaceId: string, _contentId?: string): void {
+  try { localStorage.removeItem(workspaceBindingKey(workspaceId)) } catch { /* 浏览器禁用存储时仅失去跨刷新绑定。 */ }
+}
+
+function deleteLegacyWorkspaceBinding(workspaceId: string, contentId: string): void {
+  try { localStorage.removeItem(legacyWorkspaceBindingKey(workspaceId, contentId)) } catch { /* 浏览器禁用存储时仅失去跨刷新绑定。 */ }
 }
 
 function deleteBinding(sessionId: string, contentId: string): void {

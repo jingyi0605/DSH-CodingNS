@@ -14,6 +14,7 @@ const PORT_CHECK_INTERVAL_MS = 5_000
 interface DebugTabProps extends PropsRuntime<'sidebar.right.pane.tab'> {
   readonly rpc: CodingNsRpcClient
   readonly remote: unknown
+  readonly terminalRemote?: () => unknown
   readonly sidebarRight: Context['sidebarRight']
 }
 
@@ -50,7 +51,7 @@ interface DebugProfileDraft {
 }
 
 /** 注册最小 Debug 页面；页面只负责展示和发送用户意图。 */
-export function registerDebugUi(ctx: Context, rpc: CodingNsRpcClient, remote: unknown): () => void {
+export function registerDebugUi(ctx: Context, rpc: CodingNsRpcClient, remote: unknown, terminalRemote?: () => unknown): () => void {
   const disposers: Array<() => void> = []
   try {
     disposers.push(ctx.sidebarRightTabs.register({
@@ -63,7 +64,7 @@ export function registerDebugUi(ctx: Context, rpc: CodingNsRpcClient, remote: un
     }))
     disposers.push(ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
       name: 'sidebar.right.pane.tab', key: DEBUG_PROVIDER_ID,
-      inject: () => ({ rpc, remote, sidebarRight: ctx.sidebarRight }),
+      inject: () => ({ rpc, remote, terminalRemote, sidebarRight: ctx.sidebarRight }),
     }, DebugBody)))
   } catch (error) {
     for (const dispose of disposers.reverse()) dispose()
@@ -80,7 +81,7 @@ function isDuplicateDebugRegistration(error: unknown): boolean {
   return error instanceof Error && /sidebarRight: (?:tab type id|tab kind) .* already registered/u.test(error.message)
 }
 
-function DebugBody({ sessionId, rpc, remote, sidebarRight }: DebugTabProps): ReactElement {
+function DebugBody({ sessionId, rpc, remote, terminalRemote, sidebarRight }: DebugTabProps): ReactElement {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [config, setConfig] = useState<DebugConfig | null>(null)
   const [instances, setInstances] = useState<readonly DebugInstance[]>([])
@@ -105,7 +106,7 @@ function DebugBody({ sessionId, rpc, remote, sidebarRight }: DebugTabProps): Rea
   useEffect(() => {
     let disposed = false
     setPortChecks({})
-    const terminal = (remote as { readonly terminal?: { readonly environment?: (id: string) => Promise<unknown> } } | undefined)?.terminal
+    const terminal = (terminalRemote?.() as { readonly environment?: (id: string) => Promise<unknown> } | undefined)
     void call<HostTerminalStatus>(rpc, 'terminal/status', {}).then((status) => {
       if (!disposed) setTerminalStatus(status)
     }).catch(() => { /* 调试页仍可使用系统默认 Shell；Host 状态只是可用项过滤依据。 */ })

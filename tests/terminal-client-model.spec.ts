@@ -143,6 +143,39 @@ test('终端 Remote 晚于 Client 注册时可以在就绪后重试', async () =
   await service.dispose()
 })
 
+test('Remote 注册竞态不会把持久化关闭请求显示成失败', async () => {
+  const previousStorage = globalThis.localStorage
+  const values = new Map<string, string>([
+    ['dsh.codingns.terminal.close.v1', JSON.stringify([{ sessionId: 'session-1', id: 'terminal-1', title: '终端' }])],
+  ])
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => { values.set(key, String(value)) },
+      removeItem: (key) => { values.delete(key) },
+    },
+  })
+  try {
+    const { calls, remote } = createRemote(true)
+    let currentRemote
+    const service = new CodingNsWebTerminals(new Context(), () => currentRemote)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    assert.equal(calls.close, 0)
+    assert.deepEqual(service.closeFailures.getSnapshot(), [])
+
+    currentRemote = remote
+    service.remoteReady()
+    await waitFor(() => calls.close === 1, 'Remote 就绪后未冲刷关闭请求')
+    assert.deepEqual(service.closeFailures.getSnapshot(), [])
+    assert.equal(values.get('dsh.codingns.terminal.close.v1'), '[]')
+    await service.dispose()
+  } finally {
+    if (previousStorage === undefined) delete (globalThis as { localStorage?: unknown }).localStorage
+    else Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: previousStorage })
+  }
+})
+
 test('恢复终端先解析工作区再读取工作区终端列表', async () => {
   const { calls, remote } = createRemote(true)
   const service = new CodingNsWebTerminals(new Context(), remote)
@@ -182,7 +215,7 @@ test('Client 在解析工作区后按工作区键复用终端绑定', async () =
     await first.refresh()
     const workspaceTerminals = await service.recover('session-b')
     assert.deepEqual(workspaceTerminals, [terminalInfo])
-    const second = service.view('session-b', 'tab-b', 'content-a')
+    const second = service.view('session-b', 'tab-b', 'content-b')
     assert.equal(second.id, first.id)
     await service.dispose()
   } finally {
@@ -194,7 +227,7 @@ test('Client 在解析工作区后按工作区键复用终端绑定', async () =
 test('Client 首次渲染异步解析工作区时不会覆盖已有终端', async () => {
   const previousStorage = globalThis.localStorage
   const values = new Map<string, string>([
-    ['dsh.codingns.terminal.binding.v1.' + JSON.stringify(['workspace', 'workspace-stable', 'content-a']), 'terminal-1'],
+    ['dsh.codingns.terminal.binding.v1.' + JSON.stringify(['workspace', 'workspace-stable']), 'terminal-1'],
   ])
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
@@ -208,13 +241,42 @@ test('Client 首次渲染异步解析工作区时不会覆盖已有终端', asyn
     const { calls, remote } = createRemote(true)
     remote.environment = async () => success({ ...environment, workspaceId: 'workspace-stable' })
     const service = new CodingNsWebTerminals(new Context(), remote)
-    const view = service.view('session-b', 'tab-b', 'content-a')
+    const view = service.view('session-b', 'tab-b', 'content-b')
 
     await view.refresh()
 
     assert.equal(view.id, 'terminal-1')
     assert.equal(view.state.getSnapshot().info?.id, 'terminal-1')
     assert.equal(calls.create, 0)
+    await service.dispose()
+  } finally {
+    if (previousStorage === undefined) delete (globalThis as { localStorage?: unknown }).localStorage
+    else Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: previousStorage })
+  }
+})
+
+test('Client 会把 0.1.7 早期带 contentId 的工作区键迁移为稳定键', async () => {
+  const previousStorage = globalThis.localStorage
+  const legacyKey = 'dsh.codingns.terminal.binding.v1.' + JSON.stringify(['workspace', 'workspace-stable', 'new-content'])
+  const currentKey = 'dsh.codingns.terminal.binding.v1.' + JSON.stringify(['workspace', 'workspace-stable'])
+  const values = new Map<string, string>([[legacyKey, 'terminal-1']])
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => { values.set(key, String(value)) },
+      removeItem: (key) => { values.delete(key) },
+    },
+  })
+  try {
+    const { remote } = createRemote(true)
+    remote.environment = async () => success({ ...environment, workspaceId: 'workspace-stable' })
+    const service = new CodingNsWebTerminals(new Context(), remote)
+    const view = service.view('session-a', 'tab-a', 'new-content')
+    await view.refresh()
+    assert.equal(view.id, 'terminal-1')
+    assert.equal(values.get(currentKey), 'terminal-1')
+    assert.equal(values.has(legacyKey), false)
     await service.dispose()
   } finally {
     if (previousStorage === undefined) delete (globalThis as { localStorage?: unknown }).localStorage

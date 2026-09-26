@@ -25,6 +25,8 @@ export interface InstallTerminalControllerOptions {
   readonly resolveIdentity?: (settingsDocumentPath: string) => Promise<TerminalStartupIdentity>
   /** 由 Host 解析稳定 Workspace ID 到受信任根目录；不能接收浏览器传来的绝对路径。 */
   readonly resolveWorkspaceRoot?: (workspaceId: string) => string | null
+  /** 由终端 controller 在 Host 侧登记可信 Workspace 根目录。 */
+  readonly registerWorkspaceRoot?: (workspaceId: string, cwd: string) => void
 }
 
 /**
@@ -91,6 +93,7 @@ export async function installTerminalController(
     settings: () => settings.get().terminalEnhancement,
     ...(options.platform === undefined ? {} : { platform: options.platform }),
     ...(options.resolveWorkspaceRoot === undefined ? {} : { resolveWorkspaceRoot: options.resolveWorkspaceRoot }),
+    ...(options.registerWorkspaceRoot === undefined ? {} : { registerWorkspaceRoot: options.registerWorkspaceRoot }),
   }
 
   if (!enhancedEnabled) {

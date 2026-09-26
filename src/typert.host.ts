@@ -3,7 +3,7 @@
  *
  * 这里不能重导出官方 terminal-controller 的 TYPERT：DSH loader 会校验
  * manifest.package 必须属于实际导出它的 npm 包。下面的 endpoint、wire 字段和
- * codec 与 DSH 0.1.6-alpha.2 对齐，但 package 与 invocation id 均归本包所有。
+ * codec 与 DSH 0.1.6-alpha.2 对齐，但 package、namespace 与 invocation id 均归本包所有。
  */
 import { z } from 'zod'
 
@@ -102,7 +102,9 @@ function invocation(
   return {
     id: `codingns4dsh#terminal/${method}`,
     service: 'terminalController',
-    namespace: 'terminal',
+    // DSH 0.1.7 的 api-remotes/client 会自动挂载官方 remote.terminal；
+    // 使用独立命名空间才能确保终端 UI 实际调用 Codingns4DSH Host controller。
+    namespace: 'codingnsTerminal',
     method,
     ...(options.stream === true ? { mode: 'stream' } : {}),
     invocation: { kind: 'direct' },

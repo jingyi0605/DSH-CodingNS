@@ -45,10 +45,12 @@ export function apply(ctx?: Context): void {
     debugInfo('codingns4dsh: host settings registration begin')
     const settings = registerCodingNsSettings(hostCtx)
     debugInfo('codingns4dsh: host settings registered')
+    const workspaceRoots = new Map<string, string>()
     // controller 必须在功能模块和浏览器 Client 开始消费状态前完成装配。
     // 工厂在本次启动只读取一次开关，设置 watcher 不会热切同名 service。
     const terminal = await installTerminalController(hostCtx, settings, hostCtx.settings, {
-      resolveWorkspaceRoot: (workspaceId) => resolveWorkspaceRoot(hostCtx, workspaceId),
+      resolveWorkspaceRoot: (workspaceId) => workspaceRoots.get(workspaceId) ?? resolveWorkspaceRoot(hostCtx, workspaceId),
+      registerWorkspaceRoot: (workspaceId, cwd) => workspaceRoots.set(workspaceId, cwd),
     })
     debugInfo('codingns4dsh: host terminal controller ready', { mode: terminal.mode })
     const services: CodingNsHostServices = {
@@ -61,7 +63,7 @@ export function apply(ctx?: Context): void {
       events: { on: hostCtx.on.bind(hostCtx) },
       nativeSessions: createCodingNsNativeSessionBridge(hostCtx),
       terminalProcesses: terminal.processService,
-      resolveWorkspaceRoot: (workspaceId) => resolveWorkspaceRoot(hostCtx, workspaceId),
+      resolveWorkspaceRoot: (workspaceId) => workspaceRoots.get(workspaceId) ?? resolveWorkspaceRoot(hostCtx, workspaceId),
       registerDebugProxyRoute: (handler) => hostCtx.connection.fetch.register({
         path: '/api/codingns/debug-proxy',
         methods: ['GET', 'HEAD', 'POST'],
@@ -70,7 +72,7 @@ export function apply(ctx?: Context): void {
       }),
     }
     const debug = new DebugWorkspaceService({
-      resolveWorkspaceRoot: (workspaceId) => resolveWorkspaceRoot(hostCtx, workspaceId),
+      resolveWorkspaceRoot: (workspaceId) => workspaceRoots.get(workspaceId) ?? resolveWorkspaceRoot(hostCtx, workspaceId),
       terminalProcesses: terminal.processService,
     })
     const servicesWithDebug: CodingNsHostServices = { ...services, debug }

@@ -18,6 +18,10 @@
       "types": "./data/build/dist/typert.host.d.ts",
       "default": "./data/build/dist/typert.host.js"
     },
+    "./remote": {
+      "types": "./data/build/dist/typert.remote-client.d.ts",
+      "default": "./data/build/dist/typert.remote-client.js"
+    },
     "./client": {
       "types": "./data/build/dist/client/index.d.ts",
       "default": "./data/build/dist/client/bundle.js"

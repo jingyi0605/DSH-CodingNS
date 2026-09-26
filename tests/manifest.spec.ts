@@ -36,6 +36,8 @@ test('package manifest declares the DSH bundle and client entry', () => {
   assert.equal(manifest.exports['./host'].default, './data/build/dist/host/index.js')
   assert.equal(manifest.exports['./typert'].default, './data/build/dist/typert.host.js')
   assert.equal(manifest.exports['./typert'].types, './data/build/dist/typert.host.d.ts')
+  assert.equal(manifest.exports['./remote'].default, './data/build/dist/typert.remote-client.js')
+  assert.equal(manifest.exports['./remote'].types, './data/build/dist/typert.remote-client.d.ts')
   assert.equal(manifest.exports['./bootstrap'].default, './data/build/dist/bootstrap/index.js')
   assert.equal(manifest.engines.dsh, SUPPORTED_DSH_COMPATIBILITY)
   assert.equal(manifest.peerDependencies['@deepseek-ai/dsh'], SUPPORTED_DSH_COMPATIBILITY)

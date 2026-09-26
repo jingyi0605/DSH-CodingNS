@@ -62,8 +62,9 @@ test('shell 列表只返回 Host 检测到的白名单并把设置默认项排�
   assert.equal(controller.environment(agent, signal).scrollback, 5000)
 })
 
-test('terminal list 按当前 session 解析出的工作区读取持久终端', () => {
+test('没有 Workspace Registry 时终端保持会话级回退', () => {
   let requested
+  let registered
   const controller = new CodingNsTerminalController(new Context(), {
     hostId: 'host-a',
     service: {
@@ -75,6 +76,7 @@ test('terminal list 按当前 session 解析出的工作区读取持久终端', 
     settings: () => ({ defaultProfile: 'system', appearance: { scrollback: 1000 } }),
     platform: 'darwin',
     workspaceId: (_agent, cwd) => `workspace:${cwd}`,
+    registerWorkspaceRoot: (workspaceId, cwd) => { registered = { workspaceId, cwd } },
   })
   const signal = new AbortController().signal
   const agent = { id: 'session-a', session: { header: { cwd: '/workspace/a' } } }
@@ -84,7 +86,38 @@ test('terminal list 按当前 session 解析出的工作区读取持久终端', 
   assert.deepEqual(requested, {
     hostId: 'host-a',
     sessionId: 'session-a',
-    workspaceId: 'workspace:/workspace/a',
+    workspaceId: 'session:session-a',
+  })
+  assert.equal(controller.environment(agent, signal).workspaceId, undefined)
+  assert.equal(registered, undefined)
+})
+
+test('terminal list 早于 environment 时仍按 Workspace Registry 查询', () => {
+  const ctx = new Context()
+  const originalGet = ctx.get.bind(ctx)
+  ;(ctx as unknown as { get: (name: string) => unknown }).get = (name: string) => {
+    if (name === 'workspaceRegistry') return {
+      list: () => [{ id: 'workspace-stable', sessionIds: ['session-a', 'session-b'] }],
+    }
+    return originalGet(name)
+  }
+  let requested
+  const controller = new CodingNsTerminalController(ctx, {
+    hostId: 'host-a',
+    service: {
+      listSession: (hostId, sessionId, workspaceId) => {
+        requested = { hostId, sessionId, workspaceId }
+        return []
+      },
+    },
+    settings: () => ({ defaultProfile: 'system', appearance: { scrollback: 1000 } }),
+  })
+
+  controller.list('session-b')
+  assert.deepEqual(requested, {
+    hostId: 'host-a',
+    sessionId: 'session-b',
+    workspaceId: 'workspace-stable',
   })
 })
 

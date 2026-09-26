@@ -24,6 +24,8 @@ export interface CodingNsClientServices {
   readonly rpc: CodingNsRpcClient
   /** DSH Typert Remote；归档会话模块只通过运行时探测调用可选方法。 */
   readonly remote?: unknown
+  /** Codingns4DSH 自有终端 Remote；调试页不能依赖已停用的 DSH 官方 terminal。 */
+  readonly terminalRemote?: () => unknown
   /** DSH 语言运行时；所有 Client 文案都从 Codingns4DSH 命名空间读取。 */
   readonly locale: CodingNsLocale
   /** DSH 对话装配服务；用于注册不写入 Session 的流式临时节点。 */

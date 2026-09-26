@@ -19,6 +19,6 @@ export const debugFeature: CodingNsClientFeatureModule = {
   start(context) {
     const uiContext = context.services.uiContext
     if (uiContext === undefined) throw new Error('工作区调试模块缺少 DSH UI 上下文')
-    context.resources.add(registerDebugUi(uiContext, context.services.rpc, context.services.remote))
+    context.resources.add(registerDebugUi(uiContext, context.services.rpc, context.services.remote, context.services.terminalRemote))
   },
 }

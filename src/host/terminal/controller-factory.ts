@@ -24,6 +24,7 @@ interface TerminalControllerFactoryCommonOptions {
   readonly platform?: string
   readonly generation?: (agent: DshTerminalAgent, attachmentId: string) => string
   readonly workspaceId?: (agent: DshTerminalAgent, cwd: string) => string
+  readonly registerWorkspaceRoot?: (workspaceId: string, cwd: string) => void
   readonly resolveWorkspaceRoot?: (workspaceId: string) => string | null
 }
 
@@ -88,6 +89,7 @@ export async function createTerminalController(
     platform,
     ...(options.generation === undefined ? {} : { generation: options.generation }),
     ...(options.workspaceId === undefined ? {} : { workspaceId: options.workspaceId }),
+    ...(options.registerWorkspaceRoot === undefined ? {} : { registerWorkspaceRoot: options.registerWorkspaceRoot }),
     ...(options.resolveWorkspaceRoot === undefined ? {} : { resolveWorkspaceRoot: options.resolveWorkspaceRoot }),
   })
 }
@@ -116,6 +118,7 @@ async function assembleController(
     ...(options.platform === undefined ? {} : { platform: options.platform }),
     ...(options.generation === undefined ? {} : { generation: options.generation }),
     ...(options.workspaceId === undefined ? {} : { workspaceId: options.workspaceId }),
+    ...(options.registerWorkspaceRoot === undefined ? {} : { registerWorkspaceRoot: options.registerWorkspaceRoot }),
     ...(options.runtimeType === undefined ? {} : { runtimeType: options.runtimeType }),
   })
   const processService = new TerminalProcessService(options.processStore, {

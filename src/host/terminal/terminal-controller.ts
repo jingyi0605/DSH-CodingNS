@@ -20,6 +20,7 @@ import {
   type TerminalShellProfileId,
 } from './shell-detection.js'
 import { CodingNsTerminalService, TerminalServiceError } from './terminal-service.js'
+import { debugInfo, debugWarn } from '../../shared/debug.js'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
@@ -51,6 +52,8 @@ export interface CodingNsTerminalControllerOptions {
   readonly platform?: string
   readonly generation?: (agent: DshTerminalAgent, attachmentId: string) => string
   readonly workspaceId?: (agent: DshTerminalAgent, cwd: string) => string
+  /** 终端解析出 Workspace 后登记 Host 侧可信根目录，供调试服务复用。 */
+  readonly registerWorkspaceRoot?: (workspaceId: string, cwd: string) => void
   /** 基线模式固定使用进程内 PTY；强化模式再按平台选择持久 backend。 */
   readonly runtimeType?: (
     profileId: Exclude<TerminalShellProfileId, 'system'>,
@@ -63,7 +66,7 @@ export interface CodingNsTerminalControllerOptions {
   readonly maxRows?: number
 }
 
-/** 与 DSH 0.1.6-alpha.2 `remote.terminal` 完全同名、同方法的 Host controller。 */
+/** Codingns4DSH 自有终端 Host controller，避免与 DSH 官方 `remote.terminal` 冲突。 */
 export class CodingNsTerminalController extends TypertRemoteService {
   static inject = ['typert']
   private readonly platform: string
@@ -78,7 +81,7 @@ export class CodingNsTerminalController extends TypertRemoteService {
   private readonly sessionWorkspaces = new Map<string, string>()
 
   constructor(ctx: Context, private readonly options: CodingNsTerminalControllerOptions) {
-    super(ctx, 'terminalController', { namespace: 'terminal' })
+    super(ctx, 'terminalController', { namespace: 'codingnsTerminal' })
     this.platform = options.platform ?? process.platform
     this.detectShells = options.detectShells ?? (() => detectTerminalShells({ platform: this.platform }))
     this.maxTerminals = options.maxTerminals ?? 8
@@ -92,9 +95,18 @@ export class CodingNsTerminalController extends TypertRemoteService {
   environment(agent: DshTerminalAgent, signal: AbortSignal): CodingNsTerminalEnvironment {
     signal.throwIfAborted()
     const workspaceId = this.rememberWorkspace(agent)
+    debugInfo('codingns4dsh: terminal environment', {
+      sessionId: agent.id,
+      cwd: this.cwd(agent),
+      bindingScope: this.bindingScope,
+      workspaceId,
+      wireWorkspaceId: isSessionWorkspaceId(workspaceId) ? undefined : workspaceId,
+    })
     return {
       cwd: this.cwd(agent),
-      workspaceId,
+      // 旧版 DSH 没有 Workspace Registry；不要把 cwd 伪装成稳定 Workspace ID，
+      // 否则旧版 Client 会把同目录的不同会话错误合并。
+      ...(isSessionWorkspaceId(workspaceId) ? {} : { workspaceId }),
       maxInputBytes: this.maxInputBytes,
       maxCols: this.maxCols,
       maxRows: this.maxRows,
@@ -118,8 +130,15 @@ export class CodingNsTerminalController extends TypertRemoteService {
 
   @Remote
   list(sessionId: string): CodingNsWebTerminalInfo[] {
-    const workspaceId = this.sessionWorkspaces.get(sessionId)
-    return [...this.options.service.listSession(this.options.hostId, sessionId, workspaceId)]
+    const workspaceId = this.workspaceForSession(sessionId)
+    const result = [...this.options.service.listSession(this.options.hostId, sessionId, workspaceId)]
+    debugInfo('codingns4dsh: terminal list', {
+      sessionId,
+      workspaceId,
+      registryResolved: workspaceId !== undefined && !isSessionWorkspaceId(workspaceId),
+      terminalIds: result.map((terminal) => terminal.id),
+    })
+    return result
   }
 
   @Remote
@@ -132,6 +151,12 @@ export class CodingNsTerminalController extends TypertRemoteService {
     const scope = this.scope(agent)
     this.rememberWorkspace(agent)
     const existing = this.options.service.list(scope).find((terminal) => terminal.id === request.id)
+    debugInfo('codingns4dsh: terminal create', {
+      sessionId: agent.id,
+      terminalId: request.id,
+      scope,
+      existing: existing?.id ?? null,
+    })
     if (existing !== undefined) return existing
     if (this.options.service.list(scope).length >= this.maxTerminals) {
       throw new RemoteError('terminal/limit-reached', '当前 DSH 会话的终端数量已达到上限', { limit: this.maxTerminals })
@@ -156,7 +181,7 @@ export class CodingNsTerminalController extends TypertRemoteService {
   @Remote({ mode: 'stream' })
   retain(sessionId: string, id: string, signal: AbortSignal): AsyncIterable<CodingNsTerminalRetentionFrame> {
     try {
-      const identity = this.options.service.findIdentity(this.options.hostId, sessionId, id, this.sessionWorkspaces.get(sessionId))
+      const identity = this.options.service.findIdentity(this.options.hostId, sessionId, id, this.workspaceForSession(sessionId))
       return translateTerminalStream(this.options.service.retain(identity, signal))
     } catch (error) {
       throw remoteTerminalError(error)
@@ -223,8 +248,17 @@ export class CodingNsTerminalController extends TypertRemoteService {
   async close(agent: DshTerminalAgent, id: string): Promise<void> {
     try {
       const identity = this.optionalIdentity(agent, id)
-      if (identity !== undefined) await this.options.service.close(identity)
+      debugInfo('codingns4dsh: terminal close entered', {
+        sessionId: agent.id,
+        terminalId: id,
+        identity: identity ?? null,
+      })
+      if (identity !== undefined) {
+        await this.options.service.close(identity)
+        debugInfo('codingns4dsh: terminal close success', { sessionId: agent.id, terminalId: id, identity })
+      }
     } catch (error) {
+      debugWarn('codingns4dsh: terminal close failed', { sessionId: agent.id, terminalId: id, error: errorMessage(error) })
       throw remoteTerminalError(error)
     }
   }
@@ -262,23 +296,74 @@ export class CodingNsTerminalController extends TypertRemoteService {
   }
 
   /**
-   * Workspace Registry 是跨会话的稳定身份。只有找不到正式工作区时才回退到
-   * 插件提供的 cwd 规则，避免把同一工作区的不同 Session 拆成多个终端集合。
+   * list/retain 的 wire 只有 sessionId，可能早于 agent-scoped environment 到达。
+   * 这时仍从 Host 侧 Registry 解析工作区，避免暂时缺少缓存就退回会话列表。
+   */
+  private workspaceForSession(sessionId: string): string | undefined {
+    const cached = this.sessionWorkspaces.get(sessionId)
+    if (cached !== undefined) {
+      debugInfo('codingns4dsh: terminal workspace lookup', { sessionId, source: 'cache', workspaceId: cached })
+      return cached
+    }
+    if (this.bindingScope === 'session') {
+      const fallback = `session:${sessionId}`
+      debugInfo('codingns4dsh: terminal workspace lookup', { sessionId, source: 'binding-scope-session', workspaceId: fallback })
+      return fallback
+    }
+    try {
+      const registry = this.ctx.get('workspaceRegistry') as WorkspaceRegistryLike | undefined
+      if (registry === undefined) {
+        debugWarn('codingns4dsh: terminal workspace lookup unavailable', { sessionId, reason: 'registry-undefined' })
+        return undefined
+      }
+      const entries = registry.list()
+      const workspace = entries.find((entry) => entry.sessionIds.includes(sessionId))
+      if (workspace === undefined) {
+        debugWarn('codingns4dsh: terminal workspace lookup miss', { sessionId, registryCount: entries.length })
+        return undefined
+      }
+      this.sessionWorkspaces.set(sessionId, workspace.id)
+      debugInfo('codingns4dsh: terminal workspace lookup', { sessionId, source: 'registry', workspaceId: workspace.id, registryCount: entries.length })
+      return workspace.id
+    } catch (error) {
+      debugWarn('codingns4dsh: terminal workspace lookup failed', { sessionId, error: errorMessage(error) })
+      return undefined
+    }
+  }
+
+  /**
+   * Workspace Registry 是跨会话的稳定身份；找不到正式工作区时回退到会话身份，
+   * 避免旧版 DSH 把 cwd 误当成跨会话的工作区。
    */
   private workspaceId(agent: DshTerminalAgent, cwd: string): string {
-    if (this.bindingScope === 'session') return `session:${agent.id}`
+    if (this.bindingScope === 'session') {
+      const value = `session:${agent.id}`
+      debugInfo('codingns4dsh: terminal workspace identity', { sessionId: agent.id, cwd, source: 'binding-scope-session', workspaceId: value })
+      return value
+    }
     // Cordis 未注入可选服务时直接读 ctx.workspaceRegistry 会抛出 "without inject"；
     // 通过 get 探测是官方允许的可选服务读取方式。
     const registry = this.ctx.get('workspaceRegistry') as WorkspaceRegistryLike | undefined
     if (registry !== undefined) {
       try {
-        const workspace = registry.list().find((entry) => entry.sessionIds.includes(agent.id))
-        if (workspace !== undefined) return workspace.id
-      } catch {
+        const entries = registry.list()
+        const workspace = entries.find((entry) => entry.sessionIds.includes(agent.id))
+        if (workspace !== undefined) {
+          this.options.registerWorkspaceRoot?.(workspace.id, cwd)
+          debugInfo('codingns4dsh: terminal workspace identity', { sessionId: agent.id, cwd, source: 'registry', workspaceId: workspace.id, registryCount: entries.length })
+          return workspace.id
+        }
+        debugWarn('codingns4dsh: terminal workspace identity miss', { sessionId: agent.id, cwd, registryCount: entries.length })
+      } catch (error) {
         // Workspace Registry 尚未完成启动时继续使用兼容回退，不能让终端功能阻塞 DSH。
+        debugWarn('codingns4dsh: terminal workspace identity lookup failed', { sessionId: agent.id, cwd, error: errorMessage(error) })
       }
     }
-    return this.options.workspaceId?.(agent, cwd) ?? cwd
+    // 没有正式 Registry 时只能保证当前会话隔离。options.workspaceId 保留在
+    // 接口中供旧调用方编译兼容，但不能把 cwd 当作跨会话身份。
+    const value = `session:${agent.id}`
+    debugWarn('codingns4dsh: terminal workspace identity fallback', { sessionId: agent.id, cwd, reason: registry === undefined ? 'registry-undefined' : 'registry-miss-or-not-ready', workspaceId: value })
+    return value
   }
 
   private identity(agent: DshTerminalAgent, terminalId: string): TerminalRecordIdentity {
@@ -293,6 +378,10 @@ export class CodingNsTerminalController extends TypertRemoteService {
       return undefined
     }
   }
+}
+
+function isSessionWorkspaceId(value: string): boolean {
+  return value.startsWith('session:')
 }
 
 function shellOption(shell: DetectedTerminalShell & { path: string }): CodingNsTerminalShellOption {
@@ -325,6 +414,10 @@ function remoteTerminalError(error: unknown): unknown {
     return new RemoteError('terminal/control-unavailable', error.message, { reason: 'read-only' })
   }
   return new RemoteError('terminal/unavailable', error.message, {})
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 async function* translateTerminalStream<T>(stream: AsyncIterable<T>): AsyncIterable<T> {

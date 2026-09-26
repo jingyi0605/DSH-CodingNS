@@ -81,7 +81,7 @@ export interface CodingNsTerminalShell {
   readonly name: string
 }
 
-/** 与 DSH 0.1.6-alpha.2 `remote.terminal` wire shape 对齐。 */
+/** 与 DSH 0.1.6-alpha.2 官方终端 wire shape 对齐，但由 Codingns4DSH 独立命名空间承载。 */
 export interface CodingNsWebTerminalInfo {
   readonly id: string
   readonly title: string

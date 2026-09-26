@@ -6,6 +6,7 @@
  * 驱动模块 start/disable 与资源清理。入口只负责装配与依赖声明。
  */
 import type { Context } from '@deepseek-ai/cordis'
+import type { TypertDisposer, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -36,6 +37,7 @@ import type { TerminalRemote } from './terminal/model.js'
 import { startCodingNsAccountBar } from './account-bar.js'
 import { assertInjectedDshVersion } from './dsh-runtime-version.js'
 import { createDshCapabilityRegistry } from '../dsh-capabilities/index.js'
+import { TYPERT_REMOTE } from '../typert.remote-client.js'
 
 export { ensureCryptoRandomUUID } from './lan-access.js'
 export type {
@@ -87,7 +89,7 @@ export function apply(ctx?: Context): void {
   ensureCryptoRandomUUID()
   ctx.effect(() => registerCodingNsLocale(ctx), 'codingns4dsh: Client 词典')
 
-  ctx.inject(['slots', 'connection', 'remote', 'remote.workspace', 'remote.session', 'sidebarRight', 'sidebarRightTabs', 'theme', 'locale', 'uiConversation'], (settingsCtx) => {
+  ctx.inject(['slots', 'connection', 'remote', 'remote.workspace', 'remote.session', 'sidebarRight', 'sidebarRightTabs', 'theme', 'locale', 'uiConversation'], async (settingsCtx) => {
     debugInfo('codingns4dsh: client inject ready', {
       hasConnection: settingsCtx.connection !== undefined,
       hasRemote: settingsCtx.remote !== undefined,
@@ -103,11 +105,17 @@ export function apply(ctx?: Context): void {
     const connection = settingsCtx.connection as unknown as ConnectionHandle
     const settings = createClientSettingsStore(settingsCtx, connection.rpc)
     debugInfo('codingns4dsh: client settings store ready')
-    // Typert manifest 可能晚于立即加载的 Client 入口完成登记，必须在每次调用时取 Remote。
-    // DSH 0.1.7 的 ClientRemote 声明可能尚未包含插件按需挂载的 terminal 命名空间。
-    // 运行时仍由 Typert manifest 提供该字段，因此在边界处按可选动态服务读取。
-    const terminalRemote = (): TerminalRemote | undefined => (settingsCtx.remote as unknown as { readonly terminal?: TerminalRemote }).terminal
+    const disposeTerminalRemote = await ensureTerminalRemote(settingsCtx)
+    // `remote` 是 Cordis 代理，读取嵌套命名空间必须在当前 Fiber 显式声明注入。
+    // 独立注入避免把 DSH 0.1.7 自动提供的官方 `remote.terminal` 当成插件终端。
+    let mountedTerminalRemote: TerminalRemote | undefined
+    const terminalRemote = (): TerminalRemote | undefined => mountedTerminalRemote
     const webTerminals = new CodingNsWebTerminals(settingsCtx, terminalRemote)
+    settingsCtx.inject(['remote.codingnsTerminal'], (terminalCtx) => {
+      mountedTerminalRemote = terminalCtx.get('remote.codingnsTerminal') as TerminalRemote
+      debugInfo('codingns4dsh: client terminal remote ready')
+      webTerminals.remoteReady()
+    })
     debugInfo('codingns4dsh: client terminal UI registration begin')
     const disposeTerminalUi = registerCodingNsTerminalUi(settingsCtx, webTerminals, settings)
     debugInfo('codingns4dsh: client terminal UI registration ready')
@@ -116,6 +124,7 @@ export function apply(ctx?: Context): void {
       settings,
       rpc: connection.rpc,
       remote: settingsCtx.remote,
+      terminalRemote,
       slots: settingsCtx.slots,
       locale: settingsCtx.locale,
       uiConversation: settingsCtx.uiConversation,
@@ -169,6 +178,7 @@ export function apply(ctx?: Context): void {
         unsubscribe()
         disposeTerminalUi()
         disposeAccountBar.dispose()
+        void disposeTerminalRemote()
         void webTerminals.dispose()
         void settings.dispose?.()
       }
@@ -192,6 +202,19 @@ export function apply(ctx?: Context): void {
       throw error
     }
   })
+}
+
+/** 按需挂载 Codingns4DSH 自有 Remote 描述，不能复用 DSH 官方 terminal。 */
+async function ensureTerminalRemote(ctx: Context): Promise<TypertDisposer> {
+  // 这里只能读取已经声明的 `remote`。直接探测
+  // `remote.codingnsTerminal` 会触发 Cordis 的 without-inject 错误；
+  // Remote 贡献由当前 Client assembly 负责挂载，重复挂载由上层生命周期避免。
+  const remote = ctx.get('remote') as {
+    readonly $mount: (contribution: TypertRemoteContribution) => Promise<TypertDisposer>
+  }
+  const dispose = await remote.$mount(TYPERT_REMOTE)
+  debugInfo('codingns4dsh: client terminal remote mounted')
+  return dispose
 }
 
 /** 在设置服务改名期间选择旧 Scope 或 0.1.7 ConfigForm，业务层只接收内部 Store。 */

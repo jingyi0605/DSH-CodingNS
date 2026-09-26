@@ -141,4 +141,19 @@ test('Client 构建产物提供自有 webTerminals 与 Sidebar 终端', async ()
     assert.equal(source.includes(marker), true, `Client 产物缺少自有终端标记 ${marker}`)
   }
   assert.equal(source.includes('@deepseek-ai/dsh-client-ui-sidebar-terminal'), false)
+  assert.match(source, /codingnsTerminal/u)
+})
+
+test('Client 终端 Remote 通过显式嵌套注入读取，避免 Cordis 代理越权访问', async () => {
+  const source = await readFile(clientSource, 'utf8')
+  assert.match(source, /settingsCtx\.inject\(\['remote\.codingnsTerminal'\]/u)
+  assert.match(source, /terminalCtx\.get\('remote\.codingnsTerminal'\)/u)
+  assert.doesNotMatch(source, /ctx\.get\('remote\.codingnsTerminal'\)/u)
+  assert.doesNotMatch(source, /settingsCtx\.remote\.codingnsTerminal/u)
+})
+
+test('调试页使用 Codingns4DSH 自有终端 Remote 解析 Workspace', async () => {
+  const source = await readFile(join(dirname(fileURLToPath(import.meta.url)), '../src/client/debug/ui.ts'), 'utf8')
+  assert.match(source, /terminalRemote\?\.\(\)/u)
+  assert.doesNotMatch(source, /remote\?\.terminal/u)
 })
